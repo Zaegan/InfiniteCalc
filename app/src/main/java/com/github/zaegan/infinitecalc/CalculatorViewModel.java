@@ -275,28 +275,8 @@ public class CalculatorViewModel extends AndroidViewModel {
 
     private void loadHistoryFromDb() {
         dbExecutor.execute(() -> {
-            List<HistoryEntry> entries =
-                    AppDatabase.getInstance(getApplication()).historyDao().loadAll();
-
-            // Reconstruct HistoryGroups (entries sorted groupId ASC, stepIndex ASC)
-            List<HistoryGroup> groups = new ArrayList<>();
-            long currentId = -1;
-            List<HistoryItem> currentSteps = null;
-            for (HistoryEntry e : entries) {
-                if (e.groupId != currentId) {
-                    if (currentSteps != null && !currentSteps.isEmpty()) {
-                        groups.add(new HistoryGroup(currentSteps, currentId));
-                    }
-                    currentId = e.groupId;
-                    currentSteps = new ArrayList<>();
-                }
-                currentSteps.add(new HistoryItem(e.expression, e.result));
-            }
-            if (currentSteps != null && !currentSteps.isEmpty()) {
-                groups.add(new HistoryGroup(currentSteps, currentId));
-            }
-
-            // groups is oldest-first
+            List<HistoryGroup> groups =
+                    HistoryDatabase.getInstance(getApplication()).loadAll();
             rawGroups.clear();
             rawGroups.addAll(groups);
             history.postValue(buildListItems(rawGroups));
@@ -304,19 +284,8 @@ public class CalculatorViewModel extends AndroidViewModel {
     }
 
     private void saveGroupToDb(HistoryGroup group) {
-        dbExecutor.execute(() -> {
-            List<HistoryEntry> entries = new ArrayList<>();
-            List<HistoryItem> steps = group.getSteps();
-            for (int i = 0; i < steps.size(); i++) {
-                HistoryEntry e = new HistoryEntry();
-                e.groupId = group.getTimestamp();
-                e.stepIndex = i;
-                e.expression = steps.get(i).getExpression();
-                e.result = steps.get(i).getResult();
-                entries.add(e);
-            }
-            AppDatabase.getInstance(getApplication()).historyDao().insertAll(entries);
-        });
+        dbExecutor.execute(() ->
+                HistoryDatabase.getInstance(getApplication()).saveGroup(group));
     }
 
     // ── Date-separator injection ─────────────────────────────────────────────
