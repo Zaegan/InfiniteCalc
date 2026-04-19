@@ -13,11 +13,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Holds all calculator state. Extends AndroidViewModel for SharedPreferences access.
- *
- * Expression is stored as a StringBuilder; cursor position is tracked explicitly.
- * Button handlers in MainActivity must call syncCursor() before each action so
- * that the ViewModel's cursor stays in sync with the EditText's selection.
+ * Android-facing wrapper around {@link CalculatorState}.
+ * Handles LiveData, SharedPreferences, and history grouping.
+ * All pure expression logic lives in CalculatorState (no Android deps, fully unit-testable).
  */
 public class CalculatorViewModel extends AndroidViewModel {
 
@@ -33,9 +31,8 @@ public class CalculatorViewModel extends AndroidViewModel {
     private final MutableLiveData<Boolean> varPanelVisible = new MutableLiveData<>(false);
     private final MutableLiveData<VarMode> varMode = new MutableLiveData<>(VarMode.NONE);
 
-    // ── Mutable state ───────────────────────────────────────────────────────
-    private final StringBuilder expr = new StringBuilder();
-    private int cursor = 0;
+    // ── Pure state ──────────────────────────────────────────────────────────
+    private final CalculatorState state = new CalculatorState();
     private final List<HistoryItem> currentGroupSteps = new ArrayList<>();
     private long groupStartTime = 0;
 
@@ -60,107 +57,38 @@ public class CalculatorViewModel extends AndroidViewModel {
     public void clearError() { errorMessage.setValue(null); }
 
     // ── Cursor sync ─────────────────────────────────────────────────────────
-    /** Called by MainActivity before every button action to keep cursor in sync. */
-    public void syncCursor(int pos) {
-        cursor = Math.max(0, Math.min(pos, expr.length()));
-    }
+    public void syncCursor(int pos) { state.syncCursor(pos); }
 
-    // ── Core input ──────────────────────────────────────────────────────────
-
-    /**
-     * Insert text at the current cursor position.
-     * Automatically prepends × when inserting a function call, constant, or variable
-     * immediately after a digit, closing paren, or one of the named constants.
-     */
+    // ── Delegated input ─────────────────────────────────────────────────────
     public void insert(String text) {
         exitVarMode();
-        if (cursor > 0) {
-            char prev = expr.charAt(cursor - 1);
-            boolean prevIsValue = Character.isDigit(prev) || prev == ')'
-                    || prev == 'π' || (prev >= 'A' && prev <= 'H');
-            boolean textOpensGroup = text.startsWith("sin(") || text.startsWith("cos(")
-                    || text.startsWith("tan(") || text.startsWith("ln(")
-                    || text.startsWith("log(") || text.startsWith("sqrt(")
-                    || text.startsWith("√(") || text.equals("π") || text.equals("e")
-                    || (text.length() == 1 && text.charAt(0) >= 'A' && text.charAt(0) <= 'H');
-            if (prevIsValue && textOpensGroup) {
-                expr.insert(cursor, "×");
-                cursor++;
-            }
-        }
-        expr.insert(cursor, text);
-        cursor += text.length();
+        state.insert(text);
         updateDisplay();
     }
 
-    /**
-     * Delete the token immediately before the cursor.
-     * Multi-character function tokens (e.g. "sin(") are deleted as a unit.
-     */
     public void backspace() {
         exitVarMode();
-        if (cursor == 0) return;
-        String[] multiTokens = {"sin(", "cos(", "tan(", "log(", "ln(", "sqrt(", "√("};
-        String before = expr.substring(0, cursor);
-        for (String token : multiTokens) {
-            if (before.endsWith(token)) {
-                expr.delete(cursor - token.length(), cursor);
-                cursor -= token.length();
-                updateDisplay();
-                return;
-            }
-        }
-        expr.deleteCharAt(cursor - 1);
-        cursor--;
+        state.backspace();
         updateDisplay();
     }
 
-    /**
-     * Smart parenthesis:
-     *   - Insert ) if there is an unmatched ( before cursor and the preceding char is not (.
-     *   - Otherwise insert ( — with an automatic × prefix if the preceding char is a digit or ).
-     */
     public void smartParen() {
         exitVarMode();
-        String before = expr.substring(0, cursor);
-        int depth = 0;
-        for (char c : before.toCharArray()) {
-            if (c == '(') depth++;
-            else if (c == ')') depth--;
-        }
-        char prev = before.isEmpty() ? 0 : before.charAt(before.length() - 1);
-        if (depth > 0 && prev != '(') {
-            expr.insert(cursor, ")");
-            cursor++;
-            updateDisplay();
-        } else {
-            // Open paren — auto-multiply if preceded by a value
-            if (prev != 0 && (Character.isDigit(prev) || prev == ')')) {
-                expr.insert(cursor, "×(");
-                cursor += 2;
-            } else {
-                expr.insert(cursor, "(");
-                cursor++;
-            }
-            updateDisplay();
-        }
+        state.smartParen();
+        updateDisplay();
     }
 
     // ── Evaluation ──────────────────────────────────────────────────────────
-
-    /** Evaluate the current expression; add step to history group; put result back. */
     public void onEquals() {
-        String expression = expr.toString().trim();
+        String expression = state.getExpression().trim();
         if (expression.isEmpty()) return;
         try {
             Map<String, Double> vars = loadVariables();
             double result = ExpressionEvaluator.evaluate(expression, vars);
-            String resultStr = formatResult(result);
+            String resultStr = CalculatorState.formatResult(result);
             if (groupStartTime == 0) groupStartTime = System.currentTimeMillis();
             currentGroupSteps.add(new HistoryItem(expression, resultStr));
-            expr.setLength(0);
-            expr.append(resultStr);
-            cursor = expr.length();
+            state.setExpression(resultStr);
             previewText.setValue("");
             updateDisplay();
         } catch (Exception e) {
@@ -168,27 +96,21 @@ public class CalculatorViewModel extends AndroidViewModel {
         }
     }
 
-    /** Finalize current history group and clear the expression. */
     public void onClear() {
         finalizeGroup();
-        expr.setLength(0);
-        cursor = 0;
+        state.clear();
         previewText.setValue("");
         updateDisplay();
         exitVarMode();
     }
 
-    /** Restore a previous expression without adding it to history yet. */
     public void restoreExpression(String expression) {
         finalizeGroup();
-        expr.setLength(0);
-        expr.append(expression);
-        cursor = expr.length();
+        state.setExpression(expression);
         updateDisplay();
     }
 
     // ── Variable modes ──────────────────────────────────────────────────────
-
     public void enterStoMode() {
         varMode.setValue(VarMode.STO);
         varPanelVisible.setValue(true);
@@ -204,7 +126,7 @@ public class CalculatorViewModel extends AndroidViewModel {
         if (mode == VarMode.STO) {
             try {
                 Map<String, Double> vars = loadVariables();
-                double val = ExpressionEvaluator.evaluatePartial(expr.toString(), vars);
+                double val = ExpressionEvaluator.evaluatePartial(state.getExpression(), vars);
                 prefs.edit().putFloat(varName, (float) val).apply();
             } catch (Exception ignored) {}
             exitVarMode();
@@ -215,7 +137,6 @@ public class CalculatorViewModel extends AndroidViewModel {
     }
 
     // ── Internals ───────────────────────────────────────────────────────────
-
     private void exitVarMode() {
         if (varMode.getValue() != VarMode.NONE) {
             varMode.setValue(VarMode.NONE);
@@ -235,13 +156,13 @@ public class CalculatorViewModel extends AndroidViewModel {
     }
 
     private void updateDisplay() {
-        expressionText.setValue(expr.toString());
-        cursorPos.setValue(cursor);
+        expressionText.setValue(state.getExpression());
+        cursorPos.setValue(state.getCursor());
         updatePreview();
     }
 
     private void updatePreview() {
-        String expression = expr.toString().trim();
+        String expression = state.getExpression().trim();
         if (expression.isEmpty()) {
             previewText.setValue("");
             return;
@@ -249,7 +170,7 @@ public class CalculatorViewModel extends AndroidViewModel {
         try {
             Map<String, Double> vars = loadVariables();
             double result = ExpressionEvaluator.evaluatePartial(expression, vars);
-            previewText.setValue("= " + formatResult(result));
+            previewText.setValue("= " + CalculatorState.formatResult(result));
         } catch (Exception e) {
             previewText.setValue("");
         }
@@ -263,13 +184,5 @@ public class CalculatorViewModel extends AndroidViewModel {
             }
         }
         return vars;
-    }
-
-    String formatResult(double result) {
-        if (!Double.isInfinite(result) && !Double.isNaN(result)
-                && result == Math.floor(result) && Math.abs(result) < 1e15) {
-            return String.valueOf((long) result);
-        }
-        return String.valueOf(result);
     }
 }
