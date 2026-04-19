@@ -3,6 +3,10 @@ package com.github.zaegan.infinitecalc;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.Spannable;
+import android.text.SpannableString;
+import android.text.style.RelativeSizeSpan;
+import android.text.style.SuperscriptSpan;
 import android.view.ActionMode;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -10,6 +14,7 @@ import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
@@ -38,16 +43,16 @@ public class MainActivity extends AppCompatActivity {
         expressionDisplay = findViewById(R.id.display);
         setupExpressionDisplay();
 
-        TextView previewView       = findViewById(R.id.preview);
-        RecyclerView historyList   = findViewById(R.id.history_list);
-        View keypadContent         = findViewById(R.id.keypad_content);
-        View varGrid               = findViewById(R.id.var_grid);
-        View varExtRows            = findViewById(R.id.var_ext_rows);
-        View extendedPanel         = findViewById(R.id.extended_panel);
-        TextView btnExt            = findViewById(R.id.btn_ext);
+        TextView previewView    = findViewById(R.id.preview);
+        RecyclerView historyList = findViewById(R.id.history_list);
+        View keypadContent      = findViewById(R.id.keypad_content);
+        View varGrid            = findViewById(R.id.var_grid);
+        View varExtRows         = findViewById(R.id.var_ext_rows);
+        View extendedPanel      = findViewById(R.id.extended_panel);
+        TextView btnExt         = findViewById(R.id.btn_ext);
 
+        // List is oldest-first; stackFromEnd keeps newest visible at bottom.
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
-        layoutManager.setReverseLayout(true);
         layoutManager.setStackFromEnd(true);
         historyList.setLayoutManager(layoutManager);
 
@@ -65,7 +70,7 @@ public class MainActivity extends AppCompatActivity {
 
         // ── Observe ──────────────────────────────────────────────────────────
         viewModel.getExpressionText().observe(this, text -> {
-            expressionDisplay.setText(text);
+            expressionDisplay.setText(buildDisplayText(text), TextView.BufferType.SPANNABLE);
             Integer pos = viewModel.getCursorPos().getValue();
             if (pos != null) {
                 int clamped = Math.max(0, Math.min(pos, text.length()));
@@ -81,10 +86,18 @@ public class MainActivity extends AppCompatActivity {
         });
 
         viewModel.getPreviewText().observe(this, previewView::setText);
-        viewModel.getHistory().observe(this, adapter::submitList);
+
+        viewModel.getHistory().observe(this, items -> {
+            adapter.submitList(items, () -> {
+                if (items != null && !items.isEmpty()) {
+                    historyList.scrollToPosition(items.size() - 1);
+                }
+            });
+        });
+
         viewModel.getErrorMessage().observe(this, msg -> {
             if (msg != null) {
-                android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
                 viewModel.clearError();
             }
         });
@@ -134,10 +147,10 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_divide).setOnClickListener(v ->   { sync(); viewModel.insert("\u00F7"); });
 
         // ── Permanent row: ^ | √ | () | π ────────────────────────────────────
-        findViewById(R.id.btn_pow).setOnClickListener(v ->    { sync(); viewModel.insert("^"); });
-        findViewById(R.id.btn_sqrt).setOnClickListener(v ->   { sync(); viewModel.insert("sqrt("); });
-        findViewById(R.id.btn_paren).setOnClickListener(v ->  { sync(); viewModel.smartParen(); });
-        findViewById(R.id.btn_pi).setOnClickListener(v ->     { sync(); viewModel.insert("π"); });
+        findViewById(R.id.btn_pow).setOnClickListener(v ->   { sync(); viewModel.insert("^"); });
+        findViewById(R.id.btn_sqrt).setOnClickListener(v ->  { sync(); viewModel.insert("sqrt("); });
+        findViewById(R.id.btn_paren).setOnClickListener(v -> { sync(); viewModel.smartParen(); });
+        findViewById(R.id.btn_pi).setOnClickListener(v ->    { sync(); viewModel.insert("π"); });
 
         // ── Extended operators ────────────────────────────────────────────────
         findViewById(R.id.btn_percent).setOnClickListener(v -> { sync(); viewModel.insert("%"); });
@@ -183,10 +196,35 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // ── Superscript unary minus ───────────────────────────────────────────────
+
     /**
-     * Configure the EditText so the OS cursor works (tap to position) but the
-     * software keyboard never appears.
+     * Build a SpannableString for display.  Any '−' that appears at the start
+     * of the expression, or immediately after a binary operator or '(', is
+     * rendered in superscript to clarify it is a unary negative sign.
      */
+    private static SpannableString buildDisplayText(String expr) {
+        SpannableString ss = new SpannableString(expr);
+        for (int i = 0; i < expr.length(); i++) {
+            if (expr.charAt(i) == '\u2212' && isUnaryPosition(expr, i)) {
+                ss.setSpan(new SuperscriptSpan(), i, i + 1,
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                ss.setSpan(new RelativeSizeSpan(0.65f), i, i + 1,
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+        }
+        return ss;
+    }
+
+    private static boolean isUnaryPosition(String expr, int pos) {
+        if (pos == 0) return true;
+        char prev = expr.charAt(pos - 1);
+        return prev == '+' || prev == '\u2212' || prev == '\u00D7' || prev == '\u00F7'
+                || prev == '^' || prev == '%' || prev == '(';
+    }
+
+    // ── EditText setup ────────────────────────────────────────────────────────
+
     private void setupExpressionDisplay() {
         expressionDisplay.setShowSoftInputOnFocus(false);
 
@@ -194,7 +232,6 @@ public class MainActivity extends AppCompatActivity {
             if (hasFocus) hideKeyboard(v);
         });
 
-        // Disable the text-selection action bar (Cut / Copy / Paste)
         ActionMode.Callback noOpCallback = new ActionMode.Callback() {
             @Override public boolean onCreateActionMode(ActionMode m, Menu menu) { return false; }
             @Override public boolean onPrepareActionMode(ActionMode m, Menu menu) { return false; }
@@ -212,7 +249,6 @@ public class MainActivity extends AppCompatActivity {
         if (imm != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
     }
 
-    /** Read the current EditText cursor position and sync it to the ViewModel. */
     private void sync() {
         viewModel.syncCursor(expressionDisplay.getSelectionStart());
     }

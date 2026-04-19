@@ -32,6 +32,16 @@ public class CalculatorState {
     // ── Input mutations ──────────────────────────────────────────────────────
 
     public void insert(String text) {
+        // Operator replacement: if inserting a non-minus binary operator, delete any
+        // consecutive operators immediately before the cursor so e.g. "5+" → "×" → "5×".
+        // The minus sign is excluded because it doubles as unary negative.
+        if (text.length() == 1 && isNonMinusOperator(text.charAt(0))) {
+            while (cursor > 0 && isOperatorChar(expr.charAt(cursor - 1))) {
+                expr.deleteCharAt(cursor - 1);
+                cursor--;
+            }
+        }
+
         if (cursor > 0) {
             char prev = expr.charAt(cursor - 1);
             boolean prevIsValue = Character.isDigit(prev) || prev == ')'
@@ -84,6 +94,18 @@ public class CalculatorState {
             expr.insert(cursor, "(");
             cursor++;
         }
+    }
+
+    // ── Operator helpers ────────────────────────────────────────────────────
+
+    private static boolean isOperatorChar(char c) {
+        return c == '+' || c == '\u2212' || c == '\u00D7' || c == '\u00F7'
+                || c == '^' || c == '%';
+    }
+
+    /** True for binary operators other than minus (minus can be unary). */
+    private static boolean isNonMinusOperator(char c) {
+        return c == '+' || c == '\u00D7' || c == '\u00F7' || c == '^' || c == '%';
     }
 
     // ── Formatting ───────────────────────────────────────────────────────────

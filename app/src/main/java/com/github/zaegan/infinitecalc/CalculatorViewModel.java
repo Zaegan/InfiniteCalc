@@ -7,21 +7,22 @@ import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Android-facing wrapper around {@link CalculatorState}.
  *
- * History design:
- *   - Each = press immediately creates one HistoryGroup and adds it to history.
- *   - AC also commits any accumulated draft steps as a history entry.
- *   - While the user types, any syntactically complete evaluatable expression is
- *     automatically recorded as a "draft step" in the pending group.
- *   - Auto-iterate: after =, if the expression started with a digit, the leading
- *     number is replaced with the result so = can be pressed repeatedly.
+ * History is stored persistently in a Room database and survives app restarts.
+ * Each group is saved immediately after being committed (= or AC).
+ * Date-separator items are injected between groups when the date changes.
  */
 public class CalculatorViewModel extends AndroidViewModel {
 
@@ -31,20 +32,23 @@ public class CalculatorViewModel extends AndroidViewModel {
     private final MutableLiveData<String> expressionText = new MutableLiveData<>("");
     private final MutableLiveData<Integer> cursorPos = new MutableLiveData<>(0);
     private final MutableLiveData<String> previewText = new MutableLiveData<>("");
-    private final MutableLiveData<List<HistoryGroup>> history =
+    /** Adapter-ready list: HistoryGroup items interleaved with DateSeparator items. */
+    private final MutableLiveData<List<HistoryListItem>> history =
             new MutableLiveData<>(new ArrayList<>());
     private final MutableLiveData<String> errorMessage = new MutableLiveData<>();
     private final MutableLiveData<Boolean> varPanelVisible = new MutableLiveData<>(false);
     private final MutableLiveData<VarMode> varMode = new MutableLiveData<>(VarMode.NONE);
 
+    // ── In-memory ordered list of raw groups (oldest first) ─────────────────
+    private final List<HistoryGroup> rawGroups = new ArrayList<>();
+
     // ── Pure state ──────────────────────────────────────────────────────────
     private final CalculatorState state = new CalculatorState();
 
-    /**
-     * Draft steps accumulated for the current in-progress group.
-     * Each entry is a fully evaluatable expression the user paused on.
-     */
     private final List<HistoryItem> currentDraftSteps = new ArrayList<>();
+
+    // ── Persistence ─────────────────────────────────────────────────────────
+    private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
 
     private static final String PREF_NAME = "calculator_vars";
     private static final String[] VAR_NAMES = {
@@ -56,13 +60,14 @@ public class CalculatorViewModel extends AndroidViewModel {
     public CalculatorViewModel(Application application) {
         super(application);
         prefs = application.getSharedPreferences(PREF_NAME, 0);
+        loadHistoryFromDb();
     }
 
     // ── Getters ─────────────────────────────────────────────────────────────
     public LiveData<String> getExpressionText() { return expressionText; }
     public LiveData<Integer> getCursorPos() { return cursorPos; }
     public LiveData<String> getPreviewText() { return previewText; }
-    public LiveData<List<HistoryGroup>> getHistory() { return history; }
+    public LiveData<List<HistoryListItem>> getHistory() { return history; }
     public LiveData<String> getErrorMessage() { return errorMessage; }
     public LiveData<Boolean> getVarPanelVisible() { return varPanelVisible; }
     public LiveData<VarMode> getVarMode() { return varMode; }
@@ -79,6 +84,7 @@ public class CalculatorViewModel extends AndroidViewModel {
         updateDisplay();
     }
 
+    /** Insert a result string at the cursor (used when tapping a result in history). */
     public void insertResult(String result) {
         exitVarMode();
         state.insert(result);
@@ -100,11 +106,8 @@ public class CalculatorViewModel extends AndroidViewModel {
     // ── Evaluation ──────────────────────────────────────────────────────────
 
     /**
-     * Evaluate the current expression.  Immediately creates and commits a
-     * HistoryGroup from the accumulated draft steps, then resets.
-     *
-     * Auto-iterate: if the expression begins with a digit, the leading number
-     * token is replaced with the result, so pressing = repeatedly iterates.
+     * Evaluate and commit a HistoryGroup.  Auto-iterates if the expression
+     * started with a digit (replaces leading number with result for next press).
      */
     public void onEquals() {
         String expression = state.getExpression().trim();
@@ -114,18 +117,9 @@ public class CalculatorViewModel extends AndroidViewModel {
             double result = ExpressionEvaluator.evaluate(expression, vars);
             String resultStr = CalculatorState.formatResult(result);
 
-            // Ensure the final expression is in the draft list
             addDraftStep(expression, resultStr);
+            commitGroup();
 
-            // Commit the group immediately
-            List<HistoryGroup> updated = new ArrayList<>(history.getValue());
-            updated.add(0, new HistoryGroup(
-                    new ArrayList<>(currentDraftSteps),
-                    System.currentTimeMillis()));
-            history.setValue(updated);
-            currentDraftSteps.clear();
-
-            // Auto-iterate if expression starts with a digit
             String iterated = buildIteratedExpression(expression, resultStr);
             state.setExpression(iterated != null ? iterated : resultStr);
             previewText.setValue("");
@@ -135,16 +129,10 @@ public class CalculatorViewModel extends AndroidViewModel {
         }
     }
 
-    /**
-     * AC: commit any accumulated draft steps as a history entry, then clear.
-     */
+    /** AC: commit any draft steps as a history entry, then clear. */
     public void onClear() {
         if (!currentDraftSteps.isEmpty()) {
-            List<HistoryGroup> updated = new ArrayList<>(history.getValue());
-            updated.add(0, new HistoryGroup(
-                    new ArrayList<>(currentDraftSteps),
-                    System.currentTimeMillis()));
-            history.setValue(updated);
+            commitGroup();
         }
         currentDraftSteps.clear();
         state.clear();
@@ -153,7 +141,7 @@ public class CalculatorViewModel extends AndroidViewModel {
         exitVarMode();
     }
 
-    /** Load a previous expression into the input field, discarding current drafts. */
+    /** Load a previous expression into the input field. */
     public void restoreExpression(String expression) {
         exitVarMode();
         currentDraftSteps.clear();
@@ -163,7 +151,6 @@ public class CalculatorViewModel extends AndroidViewModel {
 
     // ── Variable modes ──────────────────────────────────────────────────────
 
-    /** Toggle STO mode: enter if not in STO mode, exit if already in STO mode. */
     public void enterStoMode() {
         if (varMode.getValue() == VarMode.STO) {
             exitVarMode();
@@ -173,7 +160,6 @@ public class CalculatorViewModel extends AndroidViewModel {
         }
     }
 
-    /** Toggle REC mode: enter/switch if not in REC mode, exit if already in REC mode. */
     public void enterRecMode() {
         if (varMode.getValue() == VarMode.REC) {
             exitVarMode();
@@ -208,10 +194,19 @@ public class CalculatorViewModel extends AndroidViewModel {
     }
 
     /**
-     * If the expression begins with a digit, replace the leading number token
-     * with resultStr so that pressing = again iterates the computation.
-     * Returns null if the expression does not start with a digit, or is a bare number.
+     * Commit currentDraftSteps as a new HistoryGroup (oldest-last position = end of list).
+     * Also persists to the database.
      */
+    private void commitGroup() {
+        HistoryGroup group = new HistoryGroup(
+                new ArrayList<>(currentDraftSteps),
+                System.currentTimeMillis());
+        currentDraftSteps.clear();
+        rawGroups.add(group);            // append (oldest first → newest last)
+        history.setValue(buildListItems(rawGroups));
+        saveGroupToDb(group);
+    }
+
     private static String buildIteratedExpression(String expression, String resultStr) {
         if (expression.isEmpty() || !Character.isDigit(expression.charAt(0))) return null;
         int i = 0;
@@ -219,15 +214,10 @@ public class CalculatorViewModel extends AndroidViewModel {
                 && (Character.isDigit(expression.charAt(i)) || expression.charAt(i) == '.')) {
             i++;
         }
-        if (i >= expression.length()) return null; // expression is just a bare number
+        if (i >= expression.length()) return null;
         return resultStr + expression.substring(i);
     }
 
-    /**
-     * Add a draft step if the expression is syntactically complete (full evaluate
-     * succeeds), contains at least one operator (suppresses bare-digit noise),
-     * and hasn't already been recorded.
-     */
     private void addDraftStep(String expression, String result) {
         if (!hasOperatorOrFunction(expression)) return;
         if (!currentDraftSteps.isEmpty()
@@ -263,23 +253,95 @@ public class CalculatorViewModel extends AndroidViewModel {
             String resultStr = CalculatorState.formatResult(partialResult);
             previewText.setValue("= " + resultStr);
 
-            // Auto-record as a draft step only when the expression is fully valid
             try {
                 ExpressionEvaluator.evaluate(expression, vars);
                 addDraftStep(expression, resultStr);
-            } catch (Exception ignored) { /* incomplete expression — no draft */ }
+            } catch (Exception ignored) {}
 
         } catch (Exception e) {
             previewText.setValue("");
         }
     }
 
-    /** All variables default to 0 if not yet stored. */
     private Map<String, Double> loadVariables() {
         Map<String, Double> vars = new HashMap<>();
         for (String name : VAR_NAMES) {
             vars.put(name, (double) prefs.getFloat(name, 0f));
         }
         return vars;
+    }
+
+    // ── Persistence ─────────────────────────────────────────────────────────
+
+    private void loadHistoryFromDb() {
+        dbExecutor.execute(() -> {
+            List<HistoryEntry> entries =
+                    AppDatabase.getInstance(getApplication()).historyDao().loadAll();
+
+            // Reconstruct HistoryGroups (entries sorted groupId ASC, stepIndex ASC)
+            List<HistoryGroup> groups = new ArrayList<>();
+            long currentId = -1;
+            List<HistoryItem> currentSteps = null;
+            for (HistoryEntry e : entries) {
+                if (e.groupId != currentId) {
+                    if (currentSteps != null && !currentSteps.isEmpty()) {
+                        groups.add(new HistoryGroup(currentSteps, currentId));
+                    }
+                    currentId = e.groupId;
+                    currentSteps = new ArrayList<>();
+                }
+                currentSteps.add(new HistoryItem(e.expression, e.result));
+            }
+            if (currentSteps != null && !currentSteps.isEmpty()) {
+                groups.add(new HistoryGroup(currentSteps, currentId));
+            }
+
+            // groups is oldest-first
+            rawGroups.clear();
+            rawGroups.addAll(groups);
+            history.postValue(buildListItems(rawGroups));
+        });
+    }
+
+    private void saveGroupToDb(HistoryGroup group) {
+        dbExecutor.execute(() -> {
+            List<HistoryEntry> entries = new ArrayList<>();
+            List<HistoryItem> steps = group.getSteps();
+            for (int i = 0; i < steps.size(); i++) {
+                HistoryEntry e = new HistoryEntry();
+                e.groupId = group.getTimestamp();
+                e.stepIndex = i;
+                e.expression = steps.get(i).getExpression();
+                e.result = steps.get(i).getResult();
+                entries.add(e);
+            }
+            AppDatabase.getInstance(getApplication()).historyDao().insertAll(entries);
+        });
+    }
+
+    // ── Date-separator injection ─────────────────────────────────────────────
+
+    /** Convert raw groups (oldest-first) to adapter items, inserting date separators. */
+    private static List<HistoryListItem> buildListItems(List<HistoryGroup> groups) {
+        List<HistoryListItem> items = new ArrayList<>();
+        SimpleDateFormat keyFmt   = new SimpleDateFormat("yyyyMMdd", Locale.getDefault());
+        SimpleDateFormat labelFmt = new SimpleDateFormat("MMMM d, yyyy", Locale.getDefault());
+        String lastDayKey = null;
+        for (HistoryGroup group : groups) {
+            Date date = new Date(group.getTimestamp());
+            String dayKey = keyFmt.format(date);
+            if (!dayKey.equals(lastDayKey)) {
+                items.add(new HistoryListItem.DateSeparator(labelFmt.format(date)));
+                lastDayKey = dayKey;
+            }
+            items.add(new HistoryListItem.GroupItem(group));
+        }
+        return items;
+    }
+
+    @Override
+    protected void onCleared() {
+        super.onCleared();
+        dbExecutor.shutdown();
     }
 }

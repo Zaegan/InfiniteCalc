@@ -16,7 +16,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.ViewHolder> {
+public class HistoryAdapter extends ListAdapter<HistoryListItem, RecyclerView.ViewHolder> {
 
     public interface OnHistoryClickListener {
         /** Tapping an expression loads it into the expression bar. */
@@ -35,35 +35,75 @@ public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.Vie
         this.clickListener = listener;
     }
 
-    private static final DiffUtil.ItemCallback<HistoryGroup> DIFF_CALLBACK =
-            new DiffUtil.ItemCallback<HistoryGroup>() {
+    // ── DiffUtil ─────────────────────────────────────────────────────────────
+
+    private static final DiffUtil.ItemCallback<HistoryListItem> DIFF_CALLBACK =
+            new DiffUtil.ItemCallback<HistoryListItem>() {
                 @Override
-                public boolean areItemsTheSame(@NonNull HistoryGroup a, @NonNull HistoryGroup b) {
-                    return a.getTimestamp() == b.getTimestamp();
+                public boolean areItemsTheSame(@NonNull HistoryListItem a,
+                                               @NonNull HistoryListItem b) {
+                    if (a.getType() != b.getType()) return false;
+                    if (a instanceof HistoryListItem.GroupItem) {
+                        return ((HistoryListItem.GroupItem) a).group.getTimestamp()
+                                == ((HistoryListItem.GroupItem) b).group.getTimestamp();
+                    }
+                    if (a instanceof HistoryListItem.DateSeparator) {
+                        return ((HistoryListItem.DateSeparator) a).label
+                                .equals(((HistoryListItem.DateSeparator) b).label);
+                    }
+                    return false;
                 }
 
                 @Override
-                public boolean areContentsTheSame(@NonNull HistoryGroup a, @NonNull HistoryGroup b) {
-                    return a.getSummaryExpression().equals(b.getSummaryExpression())
-                        && a.getSummaryResult().equals(b.getSummaryResult())
-                        && a.isExpanded() == b.isExpanded();
+                public boolean areContentsTheSame(@NonNull HistoryListItem a,
+                                                  @NonNull HistoryListItem b) {
+                    if (a instanceof HistoryListItem.GroupItem) {
+                        HistoryGroup ga = ((HistoryListItem.GroupItem) a).group;
+                        HistoryGroup gb = ((HistoryListItem.GroupItem) b).group;
+                        return ga.getSummaryExpression().equals(gb.getSummaryExpression())
+                                && ga.getSummaryResult().equals(gb.getSummaryResult())
+                                && ga.isExpanded() == gb.isExpanded();
+                    }
+                    return true; // DateSeparator same label → same contents
                 }
             };
 
+    // ── View type dispatch ────────────────────────────────────────────────────
+
+    @Override
+    public int getItemViewType(int position) {
+        return getItem(position).getType();
+    }
+
     @NonNull
     @Override
-    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.item_history, parent, false);
-        return new ViewHolder(view);
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        LayoutInflater inflater = LayoutInflater.from(parent.getContext());
+        if (viewType == HistoryListItem.TYPE_DATE) {
+            View v = inflater.inflate(R.layout.item_date_separator, parent, false);
+            return new DateViewHolder(v);
+        } else {
+            View v = inflater.inflate(R.layout.item_history, parent, false);
+            return new GroupViewHolder(v);
+        }
     }
 
     @Override
-    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        HistoryGroup group = getItem(position);
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        HistoryListItem item = getItem(position);
+        if (item instanceof HistoryListItem.DateSeparator) {
+            ((DateViewHolder) holder).bind((HistoryListItem.DateSeparator) item);
+        } else {
+            bindGroup((GroupViewHolder) holder,
+                    ((HistoryListItem.GroupItem) item).group);
+        }
+    }
+
+    // ── Group binding ─────────────────────────────────────────────────────────
+
+    private void bindGroup(GroupViewHolder holder, HistoryGroup group) {
         boolean hasMultipleSteps = group.getSteps().size() > 1;
 
-        // ── Chevron (expand/collapse) — only shown when there are earlier steps ──
         if (hasMultipleSteps) {
             holder.chevron.setVisibility(View.VISIBLE);
             holder.chevron.setText(group.isExpanded() ? "▼" : "▶");
@@ -78,7 +118,6 @@ public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.Vie
             holder.chevron.setVisibility(View.INVISIBLE);
         }
 
-        // ── Summary row ──
         holder.summaryExpression.setText(group.getSummaryExpression());
         holder.summaryResult.setText(group.getSummaryResult());
 
@@ -90,7 +129,6 @@ public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.Vie
         holder.summaryResult.setOnClickListener(
                 v -> notifyResultClick(group.getSummaryResult()));
 
-        // ── Expanded steps (all steps except the last, which is shown in summary) ──
         holder.stepsContainer.removeAllViews();
         if (group.isExpanded() && hasMultipleSteps) {
             holder.stepsContainer.setVisibility(View.VISIBLE);
@@ -100,7 +138,7 @@ public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.Vie
                 HistoryItem step = steps.get(i);
                 View stepView = inflater.inflate(
                         R.layout.item_history_step, holder.stepsContainer, false);
-                TextView exprView = stepView.findViewById(R.id.step_expression);
+                TextView exprView   = stepView.findViewById(R.id.step_expression);
                 TextView resultView = stepView.findViewById(R.id.step_result);
                 exprView.setText(step.getExpression());
                 resultView.setText(step.getResult());
@@ -121,17 +159,32 @@ public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.Vie
         if (clickListener != null) clickListener.onResultClick(result);
     }
 
-    static class ViewHolder extends RecyclerView.ViewHolder {
+    // ── ViewHolders ───────────────────────────────────────────────────────────
+
+    static class GroupViewHolder extends RecyclerView.ViewHolder {
         TextView chevron, summaryExpression, summaryResult, timestamp;
         LinearLayout stepsContainer;
 
-        ViewHolder(@NonNull View itemView) {
+        GroupViewHolder(@NonNull View itemView) {
             super(itemView);
-            chevron = itemView.findViewById(R.id.history_chevron);
+            chevron           = itemView.findViewById(R.id.history_chevron);
             summaryExpression = itemView.findViewById(R.id.history_expression);
-            summaryResult = itemView.findViewById(R.id.history_result);
-            timestamp = itemView.findViewById(R.id.history_timestamp);
-            stepsContainer = itemView.findViewById(R.id.history_steps_container);
+            summaryResult     = itemView.findViewById(R.id.history_result);
+            timestamp         = itemView.findViewById(R.id.history_timestamp);
+            stepsContainer    = itemView.findViewById(R.id.history_steps_container);
+        }
+    }
+
+    static class DateViewHolder extends RecyclerView.ViewHolder {
+        TextView dateLabel;
+
+        DateViewHolder(@NonNull View itemView) {
+            super(itemView);
+            dateLabel = itemView.findViewById(R.id.date_label);
+        }
+
+        void bind(HistoryListItem.DateSeparator item) {
+            dateLabel.setText(item.label);
         }
     }
 }

@@ -44,6 +44,13 @@ public class CalculatorState {
      * or variable name immediately after a digit, closing paren, π, or A–H.
      */
     public void insert(String text) {
+        if (text.length() == 1 && isNonMinusOperator(text.charAt(0))) {
+            while (cursor > 0 && isOperatorChar(expr.charAt(cursor - 1))) {
+                expr.deleteCharAt(cursor - 1);
+                cursor--;
+            }
+        }
+
         if (cursor > 0) {
             char prev = expr.charAt(cursor - 1);
             boolean prevIsValue = Character.isDigit(prev) || prev == ')'
@@ -109,6 +116,17 @@ public class CalculatorState {
             expr.insert(cursor, "(");
             cursor++;
         }
+    }
+
+    // ── Operator helpers ────────────────────────────────────────────────────
+
+    private static boolean isOperatorChar(char c) {
+        return c == '+' || c == '\u2212' || c == '\u00D7' || c == '\u00F7'
+                || c == '^' || c == '%';
+    }
+
+    private static boolean isNonMinusOperator(char c) {
+        return c == '+' || c == '\u00D7' || c == '\u00F7' || c == '^' || c == '%';
     }
 
     // ── Formatting ───────────────────────────────────────────────────────────
