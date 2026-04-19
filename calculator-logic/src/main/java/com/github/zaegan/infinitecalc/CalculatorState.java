@@ -114,14 +114,33 @@ public class CalculatorState {
     // ── Formatting ───────────────────────────────────────────────────────────
 
     /**
-     * Format a double result for display.
-     * Whole numbers up to 1e15 are shown without a decimal point.
+     * Format a result for display, suppressing floating-point noise by rounding
+     * to 10 significant figures (e.g. 0.1+0.2 = 0.30000000000000004 → "0.3").
      */
     public static String formatResult(double result) {
-        if (!Double.isInfinite(result) && !Double.isNaN(result)
-                && result == Math.floor(result) && Math.abs(result) < 1e15) {
-            return String.valueOf((long) result);
+        if (Double.isNaN(result)) return "NaN";
+        if (Double.isInfinite(result)) return result > 0 ? "Infinity" : "-Infinity";
+
+        // Round to 10 significant figures
+        String formatted = String.format("%.10g", result);
+        double rounded = Double.parseDouble(formatted);
+
+        // Show as a plain integer if the rounded value is whole and in safe range
+        if (rounded == Math.floor(rounded) && Math.abs(rounded) < 1e15) {
+            return String.valueOf((long) rounded);
         }
-        return String.valueOf(result);
+
+        // Strip trailing zeros from mantissa (handles both decimal and sci notation)
+        int eIdx = formatted.indexOf('e');
+        if (eIdx < 0) eIdx = formatted.indexOf('E');
+        if (eIdx >= 0) {
+            String mantissa = formatted.substring(0, eIdx).replaceAll("\\.?0+$", "");
+            // Normalise exponent: "e+15" → "e15", "e-05" → "e-5"
+            String exp = formatted.substring(eIdx)
+                    .replaceAll("[eE]\\+0*", "e")
+                    .replaceAll("[eE]-0*", "e-");
+            return mantissa + exp;
+        }
+        return formatted.replaceAll("\\.?0+$", "");
     }
 }

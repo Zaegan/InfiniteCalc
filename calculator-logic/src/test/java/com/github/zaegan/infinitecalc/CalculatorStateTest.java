@@ -281,8 +281,11 @@ public class CalculatorStateTest {
     }
 
     @Test public void formatVeryLargeNumberAsDouble() {
-        // 1e15 and above → shown as double
-        assertEquals("1.0E15", CalculatorState.formatResult(1e15));
+        // 1e15 and above → shown in scientific notation (normalised)
+        String result = CalculatorState.formatResult(1e15);
+        // Verify it round-trips correctly and is in sci notation
+        assertTrue(result.contains("e") || result.contains("E"));
+        assertEquals(1e15, Double.parseDouble(result), 0.0);
     }
 
     @Test public void formatInfinity() {

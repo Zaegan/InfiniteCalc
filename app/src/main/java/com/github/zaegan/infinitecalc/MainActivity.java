@@ -3,10 +3,12 @@ package com.github.zaegan.infinitecalc;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
-import android.text.SpannableStringBuilder;
-import android.text.Spanned;
-import android.text.style.ForegroundColorSpan;
+import android.view.ActionMode;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -17,18 +19,14 @@ import androidx.recyclerview.widget.RecyclerView;
 
 public class MainActivity extends AppCompatActivity {
 
-    // Cursor glyph rendered in the expression display (app-managed, not OS keyboard cursor)
-    private static final String CURSOR_GLYPH = "|";
-    private static final int CURSOR_COLOR = 0xFF00E5FF; // bright cyan
-
     private CalculatorViewModel viewModel;
+    private EditText expressionDisplay;
     private boolean extendedMode = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Match status-bar and nav-bar chrome to the app background
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             getWindow().setStatusBarColor(Color.parseColor("#121212"));
             getWindow().setNavigationBarColor(Color.parseColor("#121212"));
@@ -38,11 +36,13 @@ public class MainActivity extends AppCompatActivity {
 
         viewModel = new ViewModelProvider(this).get(CalculatorViewModel.class);
 
-        TextView expressionDisplay = findViewById(R.id.display);
+        expressionDisplay = findViewById(R.id.display);
+        setupExpressionDisplay();
+
         TextView previewView = findViewById(R.id.preview);
         RecyclerView historyList = findViewById(R.id.history_list);
         View varPanel = findViewById(R.id.var_panel);
-        View sciRow = findViewById(R.id.sci_row);
+        View extendedPanel = findViewById(R.id.extended_panel);
         TextView btnExt = findViewById(R.id.btn_ext);
 
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
@@ -53,25 +53,24 @@ public class MainActivity extends AppCompatActivity {
         HistoryAdapter adapter = new HistoryAdapter();
         historyList.setAdapter(adapter);
 
-        adapter.setOnGroupLongClickListener(group ->
-                viewModel.restoreExpression(group.getSummaryExpression()));
+        // Tapping any expression or result in history loads it into the expression bar
+        adapter.setOnValueClickListener(value -> viewModel.restoreExpression(value));
 
         // ── Observe ──────────────────────────────────────────────────────────
-
         viewModel.getExpressionText().observe(this, text -> {
-            int pos = viewModel.getCursorPos().getValue() != null
-                    ? viewModel.getCursorPos().getValue() : text.length();
-            pos = Math.max(0, Math.min(pos, text.length()));
+            expressionDisplay.setText(text);
+            Integer pos = viewModel.getCursorPos().getValue();
+            if (pos != null) {
+                int clamped = Math.max(0, Math.min(pos, text.length()));
+                expressionDisplay.setSelection(clamped);
+            }
+        });
 
-            SpannableStringBuilder sb = new SpannableStringBuilder();
-            sb.append(text.substring(0, pos));
-            int cursorStart = sb.length();
-            sb.append(CURSOR_GLYPH);
-            sb.setSpan(new ForegroundColorSpan(CURSOR_COLOR),
-                    cursorStart, cursorStart + 1,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            sb.append(text.substring(pos));
-            expressionDisplay.setText(sb);
+        viewModel.getCursorPos().observe(this, pos -> {
+            if (pos != null) {
+                int len = expressionDisplay.getText().length();
+                expressionDisplay.setSelection(Math.max(0, Math.min(pos, len)));
+            }
         });
 
         viewModel.getPreviewText().observe(this, previewView::setText);
@@ -88,7 +87,7 @@ public class MainActivity extends AppCompatActivity {
         // ── EXT toggle ───────────────────────────────────────────────────────
         btnExt.setOnClickListener(v -> {
             extendedMode = !extendedMode;
-            sciRow.setVisibility(extendedMode ? View.VISIBLE : View.GONE);
+            extendedPanel.setVisibility(extendedMode ? View.VISIBLE : View.GONE);
             btnExt.setText(extendedMode ? "BASIC" : "EXT");
         });
 
@@ -97,31 +96,33 @@ public class MainActivity extends AppCompatActivity {
                         R.id.btn_5, R.id.btn_6, R.id.btn_7, R.id.btn_8, R.id.btn_9};
         for (int i = 0; i < numIds.length; i++) {
             final String digit = String.valueOf(i);
-            findViewById(numIds[i]).setOnClickListener(v -> viewModel.insert(digit));
+            findViewById(numIds[i]).setOnClickListener(v -> { sync(); viewModel.insert(digit); });
         }
 
         // ── Decimal ──────────────────────────────────────────────────────────
-        findViewById(R.id.btn_decimal).setOnClickListener(v -> viewModel.insert("."));
+        findViewById(R.id.btn_decimal).setOnClickListener(v -> { sync(); viewModel.insert("."); });
 
         // ── Arithmetic operators ──────────────────────────────────────────────
-        findViewById(R.id.btn_add).setOnClickListener(v -> viewModel.insert("+"));
-        // Unicode minus U+2212 matches what ExpressionEvaluator tokenizes
-        findViewById(R.id.btn_subtract).setOnClickListener(v -> viewModel.insert("\u2212"));
-        // Unicode × U+00D7 and ÷ U+00F7
-        findViewById(R.id.btn_multiply).setOnClickListener(v -> viewModel.insert("\u00D7"));
-        findViewById(R.id.btn_divide).setOnClickListener(v -> viewModel.insert("\u00F7"));
-        findViewById(R.id.btn_pow).setOnClickListener(v -> viewModel.insert("^"));
-        findViewById(R.id.btn_percent).setOnClickListener(v -> viewModel.insert("%"));
+        findViewById(R.id.btn_add).setOnClickListener(v -> { sync(); viewModel.insert("+"); });
+        findViewById(R.id.btn_subtract).setOnClickListener(v -> { sync(); viewModel.insert("\u2212"); });
+        findViewById(R.id.btn_multiply).setOnClickListener(v -> { sync(); viewModel.insert("\u00D7"); });
+        findViewById(R.id.btn_divide).setOnClickListener(v -> { sync(); viewModel.insert("\u00F7"); });
+
+        // ── Extended operators ────────────────────────────────────────────────
+        findViewById(R.id.btn_pow).setOnClickListener(v -> { sync(); viewModel.insert("^"); });
+        findViewById(R.id.btn_percent).setOnClickListener(v -> { sync(); viewModel.insert("%"); });
 
         // ── Scientific functions ──────────────────────────────────────────────
-        findViewById(R.id.btn_sin).setOnClickListener(v -> viewModel.insert("sin("));
-        findViewById(R.id.btn_cos).setOnClickListener(v -> viewModel.insert("cos("));
-        findViewById(R.id.btn_tan).setOnClickListener(v -> viewModel.insert("tan("));
-        findViewById(R.id.btn_ln).setOnClickListener(v -> viewModel.insert("ln("));
+        findViewById(R.id.btn_sin).setOnClickListener(v -> { sync(); viewModel.insert("sin("); });
+        findViewById(R.id.btn_cos).setOnClickListener(v -> { sync(); viewModel.insert("cos("); });
+        findViewById(R.id.btn_tan).setOnClickListener(v -> { sync(); viewModel.insert("tan("); });
+        findViewById(R.id.btn_ln).setOnClickListener(v -> { sync(); viewModel.insert("ln("); });
+        findViewById(R.id.btn_sqrt).setOnClickListener(v -> { sync(); viewModel.insert("sqrt("); });
+        findViewById(R.id.btn_log).setOnClickListener(v -> { sync(); viewModel.insert("log("); });
 
         // ── Smart paren / backspace / AC / = ─────────────────────────────────
-        findViewById(R.id.btn_paren).setOnClickListener(v -> viewModel.smartParen());
-        findViewById(R.id.btn_backspace).setOnClickListener(v -> viewModel.backspace());
+        findViewById(R.id.btn_paren).setOnClickListener(v -> { sync(); viewModel.smartParen(); });
+        findViewById(R.id.btn_backspace).setOnClickListener(v -> { sync(); viewModel.backspace(); });
         findViewById(R.id.btn_clear).setOnClickListener(v -> viewModel.onClear());
         findViewById(R.id.btn_equal).setOnClickListener(v -> viewModel.onEquals());
 
@@ -135,8 +136,46 @@ public class MainActivity extends AppCompatActivity {
         String[] varNames = {"A", "B", "C", "D", "E", "F", "G", "H"};
         for (int i = 0; i < varIds.length; i++) {
             final String varName = varNames[i];
-            findViewById(varIds[i]).setOnClickListener(v ->
-                    viewModel.onVariableTapped(varName));
+            findViewById(varIds[i]).setOnClickListener(v -> {
+                sync();
+                viewModel.onVariableTapped(varName);
+            });
         }
+    }
+
+    /**
+     * Configure the EditText so the OS cursor works (tap to position) but the
+     * software keyboard never appears.
+     */
+    private void setupExpressionDisplay() {
+        // Primary suppression — available from API 21
+        expressionDisplay.setShowSoftInputOnFocus(false);
+
+        // Belt-and-suspenders: also hide if the keyboard somehow appears on focus
+        expressionDisplay.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) hideKeyboard(v);
+        });
+
+        // Disable the text-selection action bar (Cut / Copy / Paste)
+        ActionMode.Callback noOpCallback = new ActionMode.Callback() {
+            @Override public boolean onCreateActionMode(ActionMode m, Menu menu) { return false; }
+            @Override public boolean onPrepareActionMode(ActionMode m, Menu menu) { return false; }
+            @Override public boolean onActionItemClicked(ActionMode m, MenuItem item) { return false; }
+            @Override public void onDestroyActionMode(ActionMode m) {}
+        };
+        expressionDisplay.setCustomSelectionActionModeCallback(noOpCallback);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            expressionDisplay.setCustomInsertionActionModeCallback(noOpCallback);
+        }
+    }
+
+    private void hideKeyboard(View v) {
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+    }
+
+    /** Read the current EditText cursor position and sync it to the ViewModel. */
+    private void sync() {
+        viewModel.syncCursor(expressionDisplay.getSelectionStart());
     }
 }

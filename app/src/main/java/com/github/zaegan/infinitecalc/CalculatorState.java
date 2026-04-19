@@ -3,9 +3,6 @@ package com.github.zaegan.infinitecalc;
 /**
  * Pure-Java state machine for the calculator's expression input.
  * No Android dependencies — fully testable with plain JUnit.
- *
- * Holds the current expression string and the cursor position within it.
- * All mutation methods update both atomically.
  */
 public class CalculatorState {
 
@@ -17,19 +14,16 @@ public class CalculatorState {
     public String getExpression() { return expr.toString(); }
     public int getCursor() { return cursor; }
 
-    /** Clamp and store a cursor position received from the UI. */
     public void syncCursor(int pos) {
         cursor = Math.max(0, Math.min(pos, expr.length()));
     }
 
-    /** Replace the entire expression (e.g. when restoring a history entry). */
     public void setExpression(String s) {
         expr.setLength(0);
         expr.append(s == null ? "" : s);
         cursor = expr.length();
     }
 
-    /** Clear the expression and reset the cursor to 0. */
     public void clear() {
         expr.setLength(0);
         cursor = 0;
@@ -37,12 +31,6 @@ public class CalculatorState {
 
     // ── Input mutations ──────────────────────────────────────────────────────
 
-    /**
-     * Insert text at the current cursor position.
-     *
-     * Automatically prepends × when inserting a function call, constant,
-     * or variable name immediately after a digit, closing paren, π, or A–H.
-     */
     public void insert(String text) {
         if (cursor > 0) {
             char prev = expr.charAt(cursor - 1);
@@ -63,10 +51,6 @@ public class CalculatorState {
         cursor += text.length();
     }
 
-    /**
-     * Delete the token immediately before the cursor.
-     * Multi-character function tokens (e.g. "sin(") are deleted as a single unit.
-     */
     public void backspace() {
         if (cursor == 0) return;
         String[] multiTokens = {"sin(", "cos(", "tan(", "log(", "ln(", "sqrt(", "√("};
@@ -82,15 +66,6 @@ public class CalculatorState {
         cursor--;
     }
 
-    /**
-     * Smart parenthesis logic:
-     * <ul>
-     *   <li>Insert ) if there is an unmatched ( before the cursor
-     *       AND the character immediately before the cursor is not (.</li>
-     *   <li>Otherwise insert ( — with an automatic × prefix when the
-     *       preceding character is a digit or ).</li>
-     * </ul>
-     */
     public void smartParen() {
         String before = expr.substring(0, cursor);
         int depth = 0;
@@ -114,14 +89,33 @@ public class CalculatorState {
     // ── Formatting ───────────────────────────────────────────────────────────
 
     /**
-     * Format a double result for display.
-     * Whole numbers up to 1e15 are shown without a decimal point.
+     * Format a result for display, suppressing floating-point noise by rounding
+     * to 10 significant figures (e.g. 0.1+0.2 = 0.30000000000000004 → "0.3").
      */
     public static String formatResult(double result) {
-        if (!Double.isInfinite(result) && !Double.isNaN(result)
-                && result == Math.floor(result) && Math.abs(result) < 1e15) {
-            return String.valueOf((long) result);
+        if (Double.isNaN(result)) return "NaN";
+        if (Double.isInfinite(result)) return result > 0 ? "Infinity" : "-Infinity";
+
+        // Round to 10 significant figures
+        String formatted = String.format("%.10g", result);
+        double rounded = Double.parseDouble(formatted);
+
+        // Show as a plain integer if the rounded value is whole and in safe range
+        if (rounded == Math.floor(rounded) && Math.abs(rounded) < 1e15) {
+            return String.valueOf((long) rounded);
         }
-        return String.valueOf(result);
+
+        // Strip trailing zeros from mantissa (handles both decimal and sci notation)
+        int eIdx = formatted.indexOf('e');
+        if (eIdx < 0) eIdx = formatted.indexOf('E');
+        if (eIdx >= 0) {
+            String mantissa = formatted.substring(0, eIdx).replaceAll("\\.?0+$", "");
+            // Normalise exponent: "e+15" → "e15", "e-05" → "e-5"
+            String exp = formatted.substring(eIdx)
+                    .replaceAll("[eE]\\+0*", "e")
+                    .replaceAll("[eE]-0*", "e-");
+            return mantissa + exp;
+        }
+        return formatted.replaceAll("\\.?0+$", "");
     }
 }

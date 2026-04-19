@@ -18,18 +18,19 @@ import java.util.Locale;
 
 public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.ViewHolder> {
 
-    public interface OnGroupLongClickListener {
-        void onLongClick(HistoryGroup group);
+    /** Fired when the user taps any expression or result string in the history. */
+    public interface OnValueClickListener {
+        void onValueClick(String value);
     }
 
-    private OnGroupLongClickListener longClickListener;
+    private OnValueClickListener valueClickListener;
 
     public HistoryAdapter() {
         super(DIFF_CALLBACK);
     }
 
-    public void setOnGroupLongClickListener(OnGroupLongClickListener listener) {
-        this.longClickListener = listener;
+    public void setOnValueClickListener(OnValueClickListener listener) {
+        this.valueClickListener = listener;
     }
 
     private static final DiffUtil.ItemCallback<HistoryGroup> DIFF_CALLBACK =
@@ -58,57 +59,68 @@ public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.Vie
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         HistoryGroup group = getItem(position);
+        boolean hasMultipleSteps = group.getSteps().size() > 1;
 
+        // ── Chevron (expand/collapse) — only shown when there are earlier steps ──
+        if (hasMultipleSteps) {
+            holder.chevron.setVisibility(View.VISIBLE);
+            holder.chevron.setText(group.isExpanded() ? "▼" : "▶");
+            holder.chevron.setOnClickListener(v -> {
+                int pos = holder.getAdapterPosition();
+                if (pos != RecyclerView.NO_POSITION) {
+                    group.setExpanded(!group.isExpanded());
+                    notifyItemChanged(pos);
+                }
+            });
+        } else {
+            holder.chevron.setVisibility(View.INVISIBLE);
+        }
+
+        // ── Summary row ──
         holder.summaryExpression.setText(group.getSummaryExpression());
         holder.summaryResult.setText(group.getSummaryResult());
 
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
         holder.timestamp.setText(sdf.format(new Date(group.getTimestamp())));
 
-        // Rebuild steps container
+        // Clicking the expression or result loads it into the input field
+        holder.summaryExpression.setOnClickListener(v -> notifyValueClick(group.getSummaryExpression()));
+        holder.summaryResult.setOnClickListener(v -> notifyValueClick(group.getSummaryResult()));
+
+        // ── Expanded steps (all steps except the last, which is shown in summary) ──
         holder.stepsContainer.removeAllViews();
-        if (group.isExpanded() && group.getSteps().size() > 1) {
+        if (group.isExpanded() && hasMultipleSteps) {
             holder.stepsContainer.setVisibility(View.VISIBLE);
             LayoutInflater inflater = LayoutInflater.from(holder.itemView.getContext());
-            // Show all steps except the last (already shown in summary row)
             List<HistoryItem> steps = group.getSteps();
             for (int i = 0; i < steps.size() - 1; i++) {
                 HistoryItem step = steps.get(i);
                 View stepView = inflater.inflate(
                         R.layout.item_history_step, holder.stepsContainer, false);
-                ((TextView) stepView.findViewById(R.id.step_expression))
-                        .setText(step.getExpression());
-                ((TextView) stepView.findViewById(R.id.step_result))
-                        .setText(step.getResult());
+                TextView exprView = stepView.findViewById(R.id.step_expression);
+                TextView resultView = stepView.findViewById(R.id.step_result);
+                exprView.setText(step.getExpression());
+                resultView.setText(step.getResult());
+                exprView.setOnClickListener(v -> notifyValueClick(step.getExpression()));
+                resultView.setOnClickListener(v -> notifyValueClick(step.getResult()));
                 holder.stepsContainer.addView(stepView);
             }
         } else {
             holder.stepsContainer.setVisibility(View.GONE);
         }
+    }
 
-        holder.itemView.setOnClickListener(v -> {
-            int pos = holder.getAdapterPosition();
-            if (pos != RecyclerView.NO_POSITION && group.getSteps().size() > 1) {
-                group.setExpanded(!group.isExpanded());
-                notifyItemChanged(pos);
-            }
-        });
-
-        holder.itemView.setOnLongClickListener(v -> {
-            if (longClickListener != null) {
-                longClickListener.onLongClick(group);
-                return true;
-            }
-            return false;
-        });
+    private void notifyValueClick(String value) {
+        if (valueClickListener != null) valueClickListener.onValueClick(value);
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView summaryExpression, summaryResult, timestamp;
+        TextView chevron, summaryExpression, summaryResult, timestamp;
         LinearLayout stepsContainer;
 
         ViewHolder(@NonNull View itemView) {
             super(itemView);
+            chevron = itemView.findViewById(R.id.history_chevron);
             summaryExpression = itemView.findViewById(R.id.history_expression);
             summaryResult = itemView.findViewById(R.id.history_result);
             timestamp = itemView.findViewById(R.id.history_timestamp);
