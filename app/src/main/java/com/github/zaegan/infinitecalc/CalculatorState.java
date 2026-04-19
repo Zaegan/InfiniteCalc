@@ -45,13 +45,16 @@ public class CalculatorState {
         if (cursor > 0) {
             char prev = expr.charAt(cursor - 1);
             boolean prevIsValue = Character.isDigit(prev) || prev == ')'
-                    || prev == 'π' || (prev >= 'A' && prev <= 'P');
+                    || prev == 'π' || (prev >= 'A' && prev <= 'Z')
+                    || prev == '\u03B1' || prev == '\u03B2';
             boolean textOpensGroup = text.startsWith("sin(") || text.startsWith("cos(")
                     || text.startsWith("tan(") || text.startsWith("ln(")
                     || text.startsWith("log(") || text.startsWith("sqrt(")
                     || text.startsWith("√(")
                     || text.equals("π") || text.equals("e")
-                    || (text.length() == 1 && text.charAt(0) >= 'A' && text.charAt(0) <= 'P');
+                    || (text.length() == 1 && (
+                            (text.charAt(0) >= 'A' && text.charAt(0) <= 'Z')
+                            || text.charAt(0) == '\u03B1' || text.charAt(0) == '\u03B2'));
             if (prevIsValue && textOpensGroup) {
                 expr.insert(cursor, "×");
                 cursor++;

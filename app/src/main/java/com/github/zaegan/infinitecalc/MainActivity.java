@@ -172,10 +172,17 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_sto).setOnClickListener(v -> viewModel.enterStoMode());
         findViewById(R.id.btn_rec).setOnClickListener(v -> viewModel.enterRecMode());
 
-        // ── Variable panel: A–H (basic) + I–P (EXT) ──────────────────────────
-        int[] varBasicIds = {R.id.btn_var_a, R.id.btn_var_b, R.id.btn_var_c, R.id.btn_var_d,
-                             R.id.btn_var_e, R.id.btn_var_f, R.id.btn_var_g, R.id.btn_var_h};
-        String[] varBasicNames = {"A", "B", "C", "D", "E", "F", "G", "H"};
+        // ── Variable panel: A–T (basic, 20 vars) + U–Z/α/β (EXT, 8 vars) ────
+        int[] varBasicIds = {
+            R.id.btn_var_a, R.id.btn_var_b, R.id.btn_var_c, R.id.btn_var_d,
+            R.id.btn_var_e, R.id.btn_var_f, R.id.btn_var_g, R.id.btn_var_h,
+            R.id.btn_var_i, R.id.btn_var_j, R.id.btn_var_k, R.id.btn_var_l,
+            R.id.btn_var_m, R.id.btn_var_n, R.id.btn_var_o, R.id.btn_var_p,
+            R.id.btn_var_q, R.id.btn_var_r, R.id.btn_var_s, R.id.btn_var_t
+        };
+        String[] varBasicNames = {
+            "A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T"
+        };
         for (int i = 0; i < varBasicIds.length; i++) {
             final String varName = varBasicNames[i];
             findViewById(varBasicIds[i]).setOnClickListener(v -> {
@@ -184,9 +191,11 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        int[] varExtIds = {R.id.btn_var_i, R.id.btn_var_j, R.id.btn_var_k, R.id.btn_var_l,
-                           R.id.btn_var_m, R.id.btn_var_n, R.id.btn_var_o, R.id.btn_var_p};
-        String[] varExtNames = {"I", "J", "K", "L", "M", "N", "O", "P"};
+        int[] varExtIds = {
+            R.id.btn_var_u, R.id.btn_var_v, R.id.btn_var_w, R.id.btn_var_x,
+            R.id.btn_var_y, R.id.btn_var_z, R.id.btn_var_alpha, R.id.btn_var_beta
+        };
+        String[] varExtNames = {"U","V","W","X","Y","Z","\u03B1","\u03B2"};
         for (int i = 0; i < varExtIds.length; i++) {
             final String varName = varExtNames[i];
             findViewById(varExtIds[i]).setOnClickListener(v -> {

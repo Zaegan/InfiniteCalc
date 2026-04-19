@@ -99,6 +99,20 @@ public class HistoryDatabase extends SQLiteOpenHelper {
     }
 
     /**
+     * Persist a single new step to an existing group.
+     * Must be called from a background thread.
+     */
+    public void saveStep(long groupId, int stepIndex, String expression, String result) {
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues cv = new ContentValues(4);
+        cv.put(C_GID, groupId);
+        cv.put(C_IDX, stepIndex);
+        cv.put(C_EXPR, expression);
+        cv.put(C_RES, result);
+        db.insertOrThrow(TABLE, null, cv);
+    }
+
+    /**
      * Persist a single HistoryGroup.
      * Must be called from a background thread.
      */

@@ -47,13 +47,26 @@ public class CalculatorViewModel extends AndroidViewModel {
 
     private final List<HistoryItem> currentDraftSteps = new ArrayList<>();
 
+    // ── Iteration state ──────────────────────────────────────────────────────
+    /**
+     * Suffix of the last evaluated expression after its leading number
+     * (e.g. "+5" from "3+5"). Non-null only when lastActionWasEquals=true
+     * and the expression started with a digit.
+     */
+    private String iterationTemplate = null;
+    private boolean lastActionWasEquals = false;
+    /** The group that successive = presses append steps to. */
+    private HistoryGroup iterationGroup = null;
+
     // ── Persistence ─────────────────────────────────────────────────────────
     private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
 
     private static final String PREF_NAME = "calculator_vars";
     private static final String[] VAR_NAMES = {
         "A", "B", "C", "D", "E", "F", "G", "H",
-        "I", "J", "K", "L", "M", "N", "O", "P"
+        "I", "J", "K", "L", "M", "N", "O", "P",
+        "Q", "R", "S", "T", "U", "V", "W", "X",
+        "Y", "Z", "\u03B1", "\u03B2"
     };
     private final SharedPreferences prefs;
 
@@ -80,6 +93,7 @@ public class CalculatorViewModel extends AndroidViewModel {
     // ── Delegated input ─────────────────────────────────────────────────────
     public void insert(String text) {
         exitVarMode();
+        resetIterationState();
         state.insert(text);
         updateDisplay();
     }
@@ -87,18 +101,21 @@ public class CalculatorViewModel extends AndroidViewModel {
     /** Insert a result string at the cursor (used when tapping a result in history). */
     public void insertResult(String result) {
         exitVarMode();
+        resetIterationState();
         state.insert(result);
         updateDisplay();
     }
 
     public void backspace() {
         exitVarMode();
+        resetIterationState();
         state.backspace();
         updateDisplay();
     }
 
     public void smartParen() {
         exitVarMode();
+        resetIterationState();
         state.smartParen();
         updateDisplay();
     }
@@ -106,31 +123,69 @@ public class CalculatorViewModel extends AndroidViewModel {
     // ── Evaluation ──────────────────────────────────────────────────────────
 
     /**
-     * Evaluate and commit a HistoryGroup.  Auto-iterates if the expression
-     * started with a digit (replaces leading number with result for next press).
+     * Evaluate the current expression.
+     *
+     * First press: evaluates, commits a HistoryGroup, clears the expression to
+     * just the result. Stores an iteration template if the expression started
+     * with a digit (e.g. "3+5" → template="+5").
+     *
+     * Consecutive press (no intervening edits): if a template exists, prepends
+     * the current result to the template ("8+5"), evaluates, appends the new
+     * step to the same group (accordion entry), updates history in-place.
      */
     public void onEquals() {
         String expression = state.getExpression().trim();
         if (expression.isEmpty()) return;
-        try {
-            Map<String, Double> vars = loadVariables();
-            double result = ExpressionEvaluator.evaluate(expression, vars);
-            String resultStr = CalculatorState.formatResult(result);
 
-            addDraftStep(expression, resultStr);
-            commitGroup();
+        if (lastActionWasEquals && iterationTemplate != null) {
+            // ── Iteration: reconstruct expression from current result + template ──
+            String currentResult = expression; // state holds the result from last =
+            String newExpr = currentResult + iterationTemplate;
+            try {
+                Map<String, Double> vars = loadVariables();
+                double result = ExpressionEvaluator.evaluate(newExpr, vars);
+                String resultStr = CalculatorState.formatResult(result);
 
-            String iterated = buildIteratedExpression(expression, resultStr);
-            state.setExpression(iterated != null ? iterated : resultStr);
-            previewText.setValue("");
-            updateDisplay();
-        } catch (Exception e) {
-            errorMessage.setValue(e.getMessage() != null ? e.getMessage() : "Error");
+                HistoryItem step = new HistoryItem(newExpr, resultStr);
+                iterationGroup.getSteps().add(step);
+                int newIndex = iterationGroup.getSteps().size() - 1;
+                saveStepToDb(iterationGroup.getTimestamp(), newIndex, newExpr, resultStr);
+                history.setValue(buildListItems(rawGroups));
+
+                state.setExpression(resultStr);
+                previewText.setValue("");
+                updateDisplay();
+                // lastActionWasEquals stays true, iterationGroup/Template unchanged
+            } catch (Exception e) {
+                errorMessage.setValue(e.getMessage() != null ? e.getMessage() : "Error");
+            }
+        } else {
+            // ── First = press (or after an edit) ──
+            try {
+                Map<String, Double> vars = loadVariables();
+                double result = ExpressionEvaluator.evaluate(expression, vars);
+                String resultStr = CalculatorState.formatResult(result);
+
+                addDraftStep(expression, resultStr);
+                commitGroup();
+
+                iterationTemplate = extractIterationTemplate(expression);
+                iterationGroup = iterationTemplate != null
+                        ? rawGroups.get(rawGroups.size() - 1) : null;
+                lastActionWasEquals = true;
+
+                state.setExpression(resultStr);
+                previewText.setValue("");
+                updateDisplay();
+            } catch (Exception e) {
+                errorMessage.setValue(e.getMessage() != null ? e.getMessage() : "Error");
+            }
         }
     }
 
     /** AC: commit any draft steps as a history entry, then clear. */
     public void onClear() {
+        resetIterationState();
         if (!currentDraftSteps.isEmpty()) {
             commitGroup();
         }
@@ -144,6 +199,7 @@ public class CalculatorViewModel extends AndroidViewModel {
     /** Load a previous expression into the input field. */
     public void restoreExpression(String expression) {
         exitVarMode();
+        resetIterationState();
         currentDraftSteps.clear();
         state.setExpression(expression);
         updateDisplay();
@@ -193,6 +249,12 @@ public class CalculatorViewModel extends AndroidViewModel {
         }
     }
 
+    private void resetIterationState() {
+        lastActionWasEquals = false;
+        iterationTemplate = null;
+        iterationGroup = null;
+    }
+
     /**
      * Commit currentDraftSteps as a new HistoryGroup (oldest-last position = end of list).
      * Also persists to the database.
@@ -207,7 +269,13 @@ public class CalculatorViewModel extends AndroidViewModel {
         saveGroupToDb(group);
     }
 
-    private static String buildIteratedExpression(String expression, String resultStr) {
+    /**
+     * Extract the iteration template from an expression.
+     * Returns the substring after the leading number, or null if the expression
+     * doesn't start with a digit or consists only of a number.
+     * E.g. "3+5" → "+5", "3" → null, "sin(3)" → null.
+     */
+    private static String extractIterationTemplate(String expression) {
         if (expression.isEmpty() || !Character.isDigit(expression.charAt(0))) return null;
         int i = 0;
         while (i < expression.length()
@@ -215,7 +283,7 @@ public class CalculatorViewModel extends AndroidViewModel {
             i++;
         }
         if (i >= expression.length()) return null;
-        return resultStr + expression.substring(i);
+        return expression.substring(i);
     }
 
     private void addDraftStep(String expression, String result) {
@@ -286,6 +354,12 @@ public class CalculatorViewModel extends AndroidViewModel {
     private void saveGroupToDb(HistoryGroup group) {
         dbExecutor.execute(() ->
                 HistoryDatabase.getInstance(getApplication()).saveGroup(group));
+    }
+
+    private void saveStepToDb(long groupId, int stepIndex, String expression, String result) {
+        dbExecutor.execute(() ->
+                HistoryDatabase.getInstance(getApplication())
+                        .saveStep(groupId, stepIndex, expression, result));
     }
 
     // ── Date-separator injection ─────────────────────────────────────────────
