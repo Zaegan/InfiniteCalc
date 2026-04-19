@@ -167,6 +167,10 @@ public class CalculatorViewModel extends AndroidViewModel {
                 String resultStr = CalculatorState.formatResult(result);
 
                 addDraftStep(expression, resultStr);
+                // Ensure plain numbers and bare variables always produce a history entry.
+                if (currentDraftSteps.isEmpty()) {
+                    currentDraftSteps.add(new HistoryItem(expression, resultStr));
+                }
                 commitGroup();
 
                 iterationTemplate = extractIterationTemplate(expression);
