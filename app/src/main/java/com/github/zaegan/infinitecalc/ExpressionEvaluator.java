@@ -1,4 +1,4 @@
-package com.example.calculator;
+package com.github.zaegan.infinitecalc;
 
 import java.util.ArrayList;
 import java.util.List;

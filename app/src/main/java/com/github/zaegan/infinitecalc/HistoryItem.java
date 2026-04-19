@@ -1,4 +1,4 @@
-package com.example.calculator;
+package com.github.zaegan.infinitecalc;
 
 /**
  * Represents a single history entry in the calculator.

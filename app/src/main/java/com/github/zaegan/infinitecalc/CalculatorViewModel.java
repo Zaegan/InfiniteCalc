@@ -1,4 +1,4 @@
-package com.example.calculator;
+package com.github.zaegan.infinitecalc;
 
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;

@@ -1,4 +1,4 @@
-package com.example.calculator;
+package com.github.zaegan.infinitecalc;
 
 import android.view.LayoutInflater;
 import android.view.View;
