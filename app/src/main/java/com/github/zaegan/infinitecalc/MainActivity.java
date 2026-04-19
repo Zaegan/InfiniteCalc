@@ -10,7 +10,6 @@ import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
@@ -39,11 +38,13 @@ public class MainActivity extends AppCompatActivity {
         expressionDisplay = findViewById(R.id.display);
         setupExpressionDisplay();
 
-        TextView previewView = findViewById(R.id.preview);
-        RecyclerView historyList = findViewById(R.id.history_list);
-        View varPanel = findViewById(R.id.var_panel);
-        View extendedPanel = findViewById(R.id.extended_panel);
-        TextView btnExt = findViewById(R.id.btn_ext);
+        TextView previewView       = findViewById(R.id.preview);
+        RecyclerView historyList   = findViewById(R.id.history_list);
+        View keypadContent         = findViewById(R.id.keypad_content);
+        View varGrid               = findViewById(R.id.var_grid);
+        View varExtRows            = findViewById(R.id.var_ext_rows);
+        View extendedPanel         = findViewById(R.id.extended_panel);
+        TextView btnExt            = findViewById(R.id.btn_ext);
 
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setReverseLayout(true);
@@ -53,8 +54,14 @@ public class MainActivity extends AppCompatActivity {
         HistoryAdapter adapter = new HistoryAdapter();
         historyList.setAdapter(adapter);
 
-        // Tapping any expression or result in history loads it into the expression bar
-        adapter.setOnValueClickListener(value -> viewModel.restoreExpression(value));
+        adapter.setOnHistoryClickListener(new HistoryAdapter.OnHistoryClickListener() {
+            @Override public void onExpressionClick(String expression) {
+                viewModel.restoreExpression(expression);
+            }
+            @Override public void onResultClick(String result) {
+                viewModel.insertResult(result);
+            }
+        });
 
         // ── Observe ──────────────────────────────────────────────────────────
         viewModel.getExpressionText().observe(this, text -> {
@@ -75,20 +82,38 @@ public class MainActivity extends AppCompatActivity {
 
         viewModel.getPreviewText().observe(this, previewView::setText);
         viewModel.getHistory().observe(this, adapter::submitList);
-        viewModel.getVarPanelVisible().observe(this, visible ->
-                varPanel.setVisibility(visible ? View.VISIBLE : View.GONE));
         viewModel.getErrorMessage().observe(this, msg -> {
             if (msg != null) {
-                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show();
                 viewModel.clearError();
+            }
+        });
+
+        // ── Var mode: toggle between keypad and var grid ──────────────────────
+        viewModel.getVarMode().observe(this, mode -> {
+            boolean inVarMode = mode != null && mode != CalculatorViewModel.VarMode.NONE;
+            keypadContent.setVisibility(inVarMode ? View.GONE : View.VISIBLE);
+            varGrid.setVisibility(inVarMode ? View.VISIBLE : View.GONE);
+            if (inVarMode) {
+                varExtRows.setVisibility(extendedMode ? View.VISIBLE : View.GONE);
+                extendedPanel.setVisibility(View.GONE);
+            } else {
+                varExtRows.setVisibility(View.GONE);
+                extendedPanel.setVisibility(extendedMode ? View.VISIBLE : View.GONE);
             }
         });
 
         // ── EXT toggle ───────────────────────────────────────────────────────
         btnExt.setOnClickListener(v -> {
             extendedMode = !extendedMode;
-            extendedPanel.setVisibility(extendedMode ? View.VISIBLE : View.GONE);
             btnExt.setText(extendedMode ? "BASIC" : "EXT");
+            CalculatorViewModel.VarMode mode = viewModel.getVarMode().getValue();
+            boolean inVarMode = mode != null && mode != CalculatorViewModel.VarMode.NONE;
+            if (inVarMode) {
+                varExtRows.setVisibility(extendedMode ? View.VISIBLE : View.GONE);
+            } else {
+                extendedPanel.setVisibility(extendedMode ? View.VISIBLE : View.GONE);
+            }
         });
 
         // ── Digits ───────────────────────────────────────────────────────────
@@ -103,25 +128,29 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_decimal).setOnClickListener(v -> { sync(); viewModel.insert("."); });
 
         // ── Arithmetic operators ──────────────────────────────────────────────
-        findViewById(R.id.btn_add).setOnClickListener(v -> { sync(); viewModel.insert("+"); });
+        findViewById(R.id.btn_add).setOnClickListener(v ->      { sync(); viewModel.insert("+"); });
         findViewById(R.id.btn_subtract).setOnClickListener(v -> { sync(); viewModel.insert("\u2212"); });
         findViewById(R.id.btn_multiply).setOnClickListener(v -> { sync(); viewModel.insert("\u00D7"); });
-        findViewById(R.id.btn_divide).setOnClickListener(v -> { sync(); viewModel.insert("\u00F7"); });
+        findViewById(R.id.btn_divide).setOnClickListener(v ->   { sync(); viewModel.insert("\u00F7"); });
+
+        // ── Permanent row: ^ | √ | () | π ────────────────────────────────────
+        findViewById(R.id.btn_pow).setOnClickListener(v ->    { sync(); viewModel.insert("^"); });
+        findViewById(R.id.btn_sqrt).setOnClickListener(v ->   { sync(); viewModel.insert("sqrt("); });
+        findViewById(R.id.btn_paren).setOnClickListener(v ->  { sync(); viewModel.smartParen(); });
+        findViewById(R.id.btn_pi).setOnClickListener(v ->     { sync(); viewModel.insert("π"); });
 
         // ── Extended operators ────────────────────────────────────────────────
-        findViewById(R.id.btn_pow).setOnClickListener(v -> { sync(); viewModel.insert("^"); });
         findViewById(R.id.btn_percent).setOnClickListener(v -> { sync(); viewModel.insert("%"); });
+        findViewById(R.id.btn_10pow).setOnClickListener(v ->   { sync(); viewModel.insert("10^"); });
 
         // ── Scientific functions ──────────────────────────────────────────────
         findViewById(R.id.btn_sin).setOnClickListener(v -> { sync(); viewModel.insert("sin("); });
         findViewById(R.id.btn_cos).setOnClickListener(v -> { sync(); viewModel.insert("cos("); });
         findViewById(R.id.btn_tan).setOnClickListener(v -> { sync(); viewModel.insert("tan("); });
-        findViewById(R.id.btn_ln).setOnClickListener(v -> { sync(); viewModel.insert("ln("); });
-        findViewById(R.id.btn_sqrt).setOnClickListener(v -> { sync(); viewModel.insert("sqrt("); });
+        findViewById(R.id.btn_ln).setOnClickListener(v ->  { sync(); viewModel.insert("ln("); });
         findViewById(R.id.btn_log).setOnClickListener(v -> { sync(); viewModel.insert("log("); });
 
-        // ── Smart paren / backspace / AC / = ─────────────────────────────────
-        findViewById(R.id.btn_paren).setOnClickListener(v -> { sync(); viewModel.smartParen(); });
+        // ── Backspace / AC / = ────────────────────────────────────────────────
         findViewById(R.id.btn_backspace).setOnClickListener(v -> { sync(); viewModel.backspace(); });
         findViewById(R.id.btn_clear).setOnClickListener(v -> viewModel.onClear());
         findViewById(R.id.btn_equal).setOnClickListener(v -> viewModel.onEquals());
@@ -130,13 +159,24 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_sto).setOnClickListener(v -> viewModel.enterStoMode());
         findViewById(R.id.btn_rec).setOnClickListener(v -> viewModel.enterRecMode());
 
-        // ── Variable panel ────────────────────────────────────────────────────
-        int[] varIds = {R.id.btn_var_a, R.id.btn_var_b, R.id.btn_var_c, R.id.btn_var_d,
-                        R.id.btn_var_e, R.id.btn_var_f, R.id.btn_var_g, R.id.btn_var_h};
-        String[] varNames = {"A", "B", "C", "D", "E", "F", "G", "H"};
-        for (int i = 0; i < varIds.length; i++) {
-            final String varName = varNames[i];
-            findViewById(varIds[i]).setOnClickListener(v -> {
+        // ── Variable panel: A–H (basic) + I–P (EXT) ──────────────────────────
+        int[] varBasicIds = {R.id.btn_var_a, R.id.btn_var_b, R.id.btn_var_c, R.id.btn_var_d,
+                             R.id.btn_var_e, R.id.btn_var_f, R.id.btn_var_g, R.id.btn_var_h};
+        String[] varBasicNames = {"A", "B", "C", "D", "E", "F", "G", "H"};
+        for (int i = 0; i < varBasicIds.length; i++) {
+            final String varName = varBasicNames[i];
+            findViewById(varBasicIds[i]).setOnClickListener(v -> {
+                sync();
+                viewModel.onVariableTapped(varName);
+            });
+        }
+
+        int[] varExtIds = {R.id.btn_var_i, R.id.btn_var_j, R.id.btn_var_k, R.id.btn_var_l,
+                           R.id.btn_var_m, R.id.btn_var_n, R.id.btn_var_o, R.id.btn_var_p};
+        String[] varExtNames = {"I", "J", "K", "L", "M", "N", "O", "P"};
+        for (int i = 0; i < varExtIds.length; i++) {
+            final String varName = varExtNames[i];
+            findViewById(varExtIds[i]).setOnClickListener(v -> {
                 sync();
                 viewModel.onVariableTapped(varName);
             });
@@ -148,10 +188,8 @@ public class MainActivity extends AppCompatActivity {
      * software keyboard never appears.
      */
     private void setupExpressionDisplay() {
-        // Primary suppression — available from API 21
         expressionDisplay.setShowSoftInputOnFocus(false);
 
-        // Belt-and-suspenders: also hide if the keyboard somehow appears on focus
         expressionDisplay.setOnFocusChangeListener((v, hasFocus) -> {
             if (hasFocus) hideKeyboard(v);
         });

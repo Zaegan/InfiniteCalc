@@ -120,7 +120,7 @@ public class ExpressionEvaluator {
                     default:
                         if (name.length() == 1) {
                             char v = name.charAt(0);
-                            if (v >= 'A' && v <= 'H') {
+                            if (v >= 'A' && v <= 'P') {
                                 tokens.add(new Token(TokenType.VARIABLE, v));
                                 break;
                             }

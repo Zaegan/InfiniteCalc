@@ -18,19 +18,21 @@ import java.util.Locale;
 
 public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.ViewHolder> {
 
-    /** Fired when the user taps any expression or result string in the history. */
-    public interface OnValueClickListener {
-        void onValueClick(String value);
+    public interface OnHistoryClickListener {
+        /** Tapping an expression loads it into the expression bar. */
+        void onExpressionClick(String expression);
+        /** Tapping a result inserts it at the cursor as if typed. */
+        void onResultClick(String result);
     }
 
-    private OnValueClickListener valueClickListener;
+    private OnHistoryClickListener clickListener;
 
     public HistoryAdapter() {
         super(DIFF_CALLBACK);
     }
 
-    public void setOnValueClickListener(OnValueClickListener listener) {
-        this.valueClickListener = listener;
+    public void setOnHistoryClickListener(OnHistoryClickListener listener) {
+        this.clickListener = listener;
     }
 
     private static final DiffUtil.ItemCallback<HistoryGroup> DIFF_CALLBACK =
@@ -83,9 +85,10 @@ public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.Vie
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
         holder.timestamp.setText(sdf.format(new Date(group.getTimestamp())));
 
-        // Clicking the expression or result loads it into the input field
-        holder.summaryExpression.setOnClickListener(v -> notifyValueClick(group.getSummaryExpression()));
-        holder.summaryResult.setOnClickListener(v -> notifyValueClick(group.getSummaryResult()));
+        holder.summaryExpression.setOnClickListener(
+                v -> notifyExpressionClick(group.getSummaryExpression()));
+        holder.summaryResult.setOnClickListener(
+                v -> notifyResultClick(group.getSummaryResult()));
 
         // ── Expanded steps (all steps except the last, which is shown in summary) ──
         holder.stepsContainer.removeAllViews();
@@ -101,8 +104,8 @@ public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.Vie
                 TextView resultView = stepView.findViewById(R.id.step_result);
                 exprView.setText(step.getExpression());
                 resultView.setText(step.getResult());
-                exprView.setOnClickListener(v -> notifyValueClick(step.getExpression()));
-                resultView.setOnClickListener(v -> notifyValueClick(step.getResult()));
+                exprView.setOnClickListener(v -> notifyExpressionClick(step.getExpression()));
+                resultView.setOnClickListener(v -> notifyResultClick(step.getResult()));
                 holder.stepsContainer.addView(stepView);
             }
         } else {
@@ -110,8 +113,12 @@ public class HistoryAdapter extends ListAdapter<HistoryGroup, HistoryAdapter.Vie
         }
     }
 
-    private void notifyValueClick(String value) {
-        if (valueClickListener != null) valueClickListener.onValueClick(value);
+    private void notifyExpressionClick(String expression) {
+        if (clickListener != null) clickListener.onExpressionClick(expression);
+    }
+
+    private void notifyResultClick(String result) {
+        if (clickListener != null) clickListener.onResultClick(result);
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {

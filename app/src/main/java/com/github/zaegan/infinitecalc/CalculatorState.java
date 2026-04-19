@@ -35,13 +35,13 @@ public class CalculatorState {
         if (cursor > 0) {
             char prev = expr.charAt(cursor - 1);
             boolean prevIsValue = Character.isDigit(prev) || prev == ')'
-                    || prev == 'π' || (prev >= 'A' && prev <= 'H');
+                    || prev == 'π' || (prev >= 'A' && prev <= 'P');
             boolean textOpensGroup = text.startsWith("sin(") || text.startsWith("cos(")
                     || text.startsWith("tan(") || text.startsWith("ln(")
                     || text.startsWith("log(") || text.startsWith("sqrt(")
                     || text.startsWith("√(")
                     || text.equals("π") || text.equals("e")
-                    || (text.length() == 1 && text.charAt(0) >= 'A' && text.charAt(0) <= 'H');
+                    || (text.length() == 1 && text.charAt(0) >= 'A' && text.charAt(0) <= 'P');
             if (prevIsValue && textOpensGroup) {
                 expr.insert(cursor, "×");
                 cursor++;
