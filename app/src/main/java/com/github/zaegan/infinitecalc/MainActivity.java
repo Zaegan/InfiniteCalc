@@ -1,5 +1,6 @@
 package com.github.zaegan.infinitecalc;
 
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -20,6 +21,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.button.MaterialButton;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -114,6 +117,7 @@ public class MainActivity extends AppCompatActivity {
                 varExtRows.setVisibility(View.GONE);
                 extendedPanel.setVisibility(extendedMode ? View.VISIBLE : View.GONE);
             }
+            updateVarModeHighlight(mode);
         });
 
         // ── EXT toggle ───────────────────────────────────────────────────────
@@ -203,6 +207,34 @@ public class MainActivity extends AppCompatActivity {
                 viewModel.onVariableTapped(varName);
             });
         }
+    }
+
+    // ── STO / REC active-mode highlight ──────────────────────────────────────
+
+    /**
+     * Visually distinguish the active STO or REC button with a bright fill and
+     * a semi-white stroke so it's obvious which mode is on and how to exit it.
+     */
+    private void updateVarModeHighlight(CalculatorViewModel.VarMode mode) {
+        MaterialButton btnSto = (MaterialButton) findViewById(R.id.btn_sto);
+        MaterialButton btnRec = (MaterialButton) findViewById(R.id.btn_rec);
+        int strokePx = Math.round(2.5f * getResources().getDisplayMetrics().density);
+        int haloColor = Color.parseColor("#ccffffff"); // semi-transparent white glow
+
+        boolean stoActive = mode == CalculatorViewModel.VarMode.STO;
+        boolean recActive = mode == CalculatorViewModel.VarMode.REC;
+
+        btnSto.setBackgroundTintList(ColorStateList.valueOf(
+                Color.parseColor(stoActive ? "#d45000" : "#3a2000")));
+        btnSto.setTextColor(stoActive ? Color.WHITE : Color.parseColor("#ffb060"));
+        btnSto.setStrokeColor(ColorStateList.valueOf(stoActive ? haloColor : Color.TRANSPARENT));
+        btnSto.setStrokeWidth(stoActive ? strokePx : 0);
+
+        btnRec.setBackgroundTintList(ColorStateList.valueOf(
+                Color.parseColor(recActive ? "#0055cc" : "#001e3a")));
+        btnRec.setTextColor(recActive ? Color.WHITE : Color.parseColor("#60b0ff"));
+        btnRec.setStrokeColor(ColorStateList.valueOf(recActive ? haloColor : Color.TRANSPARENT));
+        btnRec.setStrokeWidth(recActive ? strokePx : 0);
     }
 
     // ── Superscript unary minus ───────────────────────────────────────────────
