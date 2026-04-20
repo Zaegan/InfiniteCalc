@@ -171,6 +171,7 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_backspace).setOnClickListener(v -> { sync(); viewModel.backspace(); });
         findViewById(R.id.btn_clear).setOnClickListener(v -> viewModel.onClear());
         findViewById(R.id.btn_equal).setOnClickListener(v -> viewModel.onEquals());
+        findViewById(R.id.btn_equal_var).setOnClickListener(v -> viewModel.onEquals());
 
         // ── STO / REC ─────────────────────────────────────────────────────────
         findViewById(R.id.btn_sto).setOnClickListener(v -> viewModel.enterStoMode());
