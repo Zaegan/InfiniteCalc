@@ -87,13 +87,27 @@ public class CalculatorState {
             else if (c == ')') depth--;
         }
         char prev = before.isEmpty() ? 0 : before.charAt(before.length() - 1);
-        if (depth > 0 && prev != '(') {
-            expr.insert(cursor, ")");
-            cursor++;
-        } else if (prev != 0 && (Character.isDigit(prev) || prev == ')')) {
-            expr.insert(cursor, "×(");
-            cursor += 2;
+
+        // A "value" ending: digit, close-paren, constants (π, e), or variables (A–Z, α, β).
+        // After any of these a second paren either closes an open group or opens with ×.
+        // After an operator, '(', or at the start the paren MUST open — the operator
+        // needs an operand and there is no other way to express that intent.
+        boolean prevIsValue = prev != 0
+                && (Character.isDigit(prev) || prev == ')'
+                    || prev == 'π' || prev == 'e'
+                    || (prev >= 'A' && prev <= 'Z')
+                    || prev == '\u03B1' || prev == '\u03B2');
+
+        if (prevIsValue) {
+            if (depth > 0) {
+                expr.insert(cursor, ")");
+                cursor++;
+            } else {
+                expr.insert(cursor, "×(");
+                cursor += 2;
+            }
         } else {
+            // After operator, '(', or at start of expression → must open
             expr.insert(cursor, "(");
             cursor++;
         }

@@ -221,6 +221,51 @@ public class CalculatorStateTest {
         assertEquals("((1+2))", s.getExpression());
     }
 
+    @Test public void smartParenOpensAfterOperatorWithDepth() {
+        // Bug: old code saw depth=2 and closed; new rule: operator → always open
+        s.insert("((1+");
+        s.smartParen();
+        assertEquals("((1+(", s.getExpression());
+    }
+
+    @Test public void smartParenOpensAfterUnaryMinusWithDepth() {
+        // ((1+− prev is minus (operator) → must open despite depth=2
+        s.insert("((1+\u2212");
+        s.smartParen();
+        assertEquals("((1+\u2212(", s.getExpression());
+    }
+
+    @Test public void smartParenOpensAfterOperatorMinusSequence() {
+        // +− is an operator sequence (unary minus); paren after it must open
+        s.insert("((1+\u2212");
+        s.smartParen();
+        assertEquals("((1+\u2212(", s.getExpression());
+    }
+
+    @Test public void smartParenExhaustsDepthThenMultiplies() {
+        // After all opens are closed, next press on a value-ending inserts ×(
+        s.insert("((1+2");
+        s.smartParen(); // → ((1+2)   depth becomes 1
+        s.smartParen(); // → ((1+2))  depth becomes 0
+        s.smartParen(); // prev=')' value, depth=0 → ×(
+        assertEquals("((1+2))\u00D7(", s.getExpression());
+    }
+
+    @Test public void smartParenOpensAfterOpenParenWithDepth() {
+        // '(' is not a value → always opens, even with depth > 0
+        s.insert("(");
+        s.smartParen(); // depth=1 but prev='(' → open
+        s.smartParen(); // depth=2, prev='(' → open
+        assertEquals("(((", s.getExpression());
+    }
+
+    @Test public void smartParenClosesPrecededByCloseParen() {
+        // ) is a value; with depth remaining, should close
+        s.insert("((1+2)");
+        s.smartParen(); // prev=')', depth=1 → close
+        assertEquals("((1+2))", s.getExpression());
+    }
+
     // ── clear / setExpression ────────────────────────────────────────────────
 
     @Test public void clearResetsState() {
