@@ -1,5 +1,8 @@
 package com.github.zaegan.infinitecalc;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Build;
@@ -13,7 +16,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -27,7 +29,7 @@ import com.google.android.material.button.MaterialButton;
 public class MainActivity extends AppCompatActivity {
 
     private CalculatorViewModel viewModel;
-    private EditText expressionDisplay;
+    private CalculatorEditText expressionDisplay;
     private boolean extendedMode = false;
 
     @Override
@@ -68,6 +70,12 @@ public class MainActivity extends AppCompatActivity {
             }
             @Override public void onResultClick(String result) {
                 viewModel.insertResult(result);
+            }
+            @Override public void onExpressionLongClick(String expression) {
+                copyToClipboard(expression);
+            }
+            @Override public void onResultLongClick(String result) {
+                copyToClipboard(result);
             }
         });
 
@@ -274,30 +282,71 @@ public class MainActivity extends AppCompatActivity {
                 || prev == '^' || prev == '%' || prev == '(';
     }
 
-    // ── EditText setup ────────────────────────────────────────────────────────
+    // ── EditText / CalculatorEditText setup ───────────────────────────────────
 
     private void setupExpressionDisplay() {
         expressionDisplay.setShowSoftInputOnFocus(false);
-
         expressionDisplay.setOnFocusChangeListener((v, hasFocus) -> {
             if (hasFocus) hideKeyboard(v);
         });
 
-        ActionMode.Callback noOpCallback = new ActionMode.Callback() {
-            @Override public boolean onCreateActionMode(ActionMode m, Menu menu) { return false; }
-            @Override public boolean onPrepareActionMode(ActionMode m, Menu menu) { return false; }
+        // Paste: sanitize clipboard text and route through ViewModel so it
+        // remains the single source of truth for the expression.
+        expressionDisplay.setPasteListener(text -> {
+            viewModel.syncCursor(expressionDisplay.getSelectionStart());
+            viewModel.insert(text); // text is already sanitized by CalculatorEditText
+        });
+
+        // Selection action mode (long-press with selection handles):
+        // allow Copy, Paste, Select All — remove Cut (deletion bypasses ViewModel).
+        ActionMode.Callback selectionCallback = new ActionMode.Callback() {
+            @Override public boolean onCreateActionMode(ActionMode m, Menu menu) { return true; }
+            @Override public boolean onPrepareActionMode(ActionMode m, Menu menu) {
+                menu.removeItem(android.R.id.cut);
+                return true;
+            }
             @Override public boolean onActionItemClicked(ActionMode m, MenuItem item) { return false; }
             @Override public void onDestroyActionMode(ActionMode m) {}
         };
-        expressionDisplay.setCustomSelectionActionModeCallback(noOpCallback);
+        expressionDisplay.setCustomSelectionActionModeCallback(selectionCallback);
+
+        // Insertion action mode (tap to place cursor): show Paste only.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            expressionDisplay.setCustomInsertionActionModeCallback(noOpCallback);
+            ActionMode.Callback insertionCallback = new ActionMode.Callback() {
+                @Override public boolean onCreateActionMode(ActionMode m, Menu menu) { return true; }
+                @Override public boolean onPrepareActionMode(ActionMode m, Menu menu) {
+                    menu.removeItem(android.R.id.cut);
+                    menu.removeItem(android.R.id.copy);
+                    menu.removeItem(android.R.id.selectAll);
+                    return true;
+                }
+                @Override public boolean onActionItemClicked(ActionMode m, MenuItem item) { return false; }
+                @Override public void onDestroyActionMode(ActionMode m) {}
+            };
+            expressionDisplay.setCustomInsertionActionModeCallback(insertionCallback);
         }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        // Extra safety: hide the keyboard whenever the window regains focus
+        // (e.g. returning from standby), even if setShowSoftInputOnFocus already
+        // suppresses it — some devices re-show it during the focus transition.
+        if (hasFocus) hideKeyboard(expressionDisplay);
     }
 
     private void hideKeyboard(View v) {
         InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         if (imm != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+    }
+
+    private void copyToClipboard(String text) {
+        ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cb != null) {
+            cb.setPrimaryClip(ClipData.newPlainText("calculator", text));
+            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void sync() {

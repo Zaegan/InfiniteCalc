@@ -21,7 +21,7 @@
         android:background="#2a2a2a" />
 
     <!-- Expression display: fully app-managed, no keyboard involvement -->
-    <EditText
+    <com.github.zaegan.infinitecalc.CalculatorEditText
         android:id="@+id/display"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

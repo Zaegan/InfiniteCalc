@@ -23,6 +23,10 @@ public class HistoryAdapter extends ListAdapter<HistoryListItem, RecyclerView.Vi
         void onExpressionClick(String expression);
         /** Tapping a result inserts it at the cursor as if typed. */
         void onResultClick(String result);
+        /** Long-pressing an expression copies it as plain text. */
+        void onExpressionLongClick(String expression);
+        /** Long-pressing a result copies it as plain text. */
+        void onResultLongClick(String result);
     }
 
     private OnHistoryClickListener clickListener;
@@ -128,6 +132,12 @@ public class HistoryAdapter extends ListAdapter<HistoryListItem, RecyclerView.Vi
                 v -> notifyExpressionClick(group.getSummaryExpression()));
         holder.summaryResult.setOnClickListener(
                 v -> notifyResultClick(group.getSummaryResult()));
+        holder.summaryExpression.setOnLongClickListener(v -> {
+            notifyExpressionLongClick(group.getSummaryExpression()); return true;
+        });
+        holder.summaryResult.setOnLongClickListener(v -> {
+            notifyResultLongClick(group.getSummaryResult()); return true;
+        });
 
         holder.stepsContainer.removeAllViews();
         if (group.isExpanded() && hasMultipleSteps) {
@@ -144,6 +154,12 @@ public class HistoryAdapter extends ListAdapter<HistoryListItem, RecyclerView.Vi
                 resultView.setText(step.getResult());
                 exprView.setOnClickListener(v -> notifyExpressionClick(step.getExpression()));
                 resultView.setOnClickListener(v -> notifyResultClick(step.getResult()));
+                exprView.setOnLongClickListener(v -> {
+                    notifyExpressionLongClick(step.getExpression()); return true;
+                });
+                resultView.setOnLongClickListener(v -> {
+                    notifyResultLongClick(step.getResult()); return true;
+                });
                 holder.stepsContainer.addView(stepView);
             }
         } else {
@@ -157,6 +173,14 @@ public class HistoryAdapter extends ListAdapter<HistoryListItem, RecyclerView.Vi
 
     private void notifyResultClick(String result) {
         if (clickListener != null) clickListener.onResultClick(result);
+    }
+
+    private void notifyExpressionLongClick(String expression) {
+        if (clickListener != null) clickListener.onExpressionLongClick(expression);
+    }
+
+    private void notifyResultLongClick(String result) {
+        if (clickListener != null) clickListener.onResultLongClick(result);
     }
 
     // ── ViewHolders ───────────────────────────────────────────────────────────
