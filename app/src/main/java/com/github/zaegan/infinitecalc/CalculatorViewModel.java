@@ -146,16 +146,25 @@ public class CalculatorViewModel extends AndroidViewModel {
                 double result = ExpressionEvaluator.evaluate(newExpr, vars);
                 String resultStr = CalculatorState.formatResult(result);
 
-                HistoryItem step = new HistoryItem(newExpr, resultStr);
-                iterationGroup.getSteps().add(step);
-                int newIndex = iterationGroup.getSteps().size() - 1;
-                saveStepToDb(iterationGroup.getTimestamp(), newIndex, newExpr, resultStr);
+                // Build a NEW HistoryGroup (same timestamp) with the added step so that
+                // DiffUtil sees two distinct objects and triggers a rebind. Mutating the
+                // existing group in-place causes DiffUtil to compare the same object
+                // against itself and conclude nothing changed.
+                List<HistoryItem> newSteps = new ArrayList<>(iterationGroup.getSteps());
+                newSteps.add(new HistoryItem(newExpr, resultStr));
+                HistoryGroup newGroup = new HistoryGroup(newSteps, iterationGroup.getTimestamp());
+                newGroup.setExpanded(iterationGroup.isExpanded());
+                int groupIndex = rawGroups.indexOf(iterationGroup);
+                rawGroups.set(groupIndex, newGroup);
+                iterationGroup = newGroup;
+
+                saveStepToDb(newGroup.getTimestamp(), newSteps.size() - 1, newExpr, resultStr);
                 history.setValue(buildListItems(rawGroups));
 
                 state.setExpression(resultStr);
                 previewText.setValue("");
                 updateDisplay();
-                // lastActionWasEquals stays true, iterationGroup/Template unchanged
+                // lastActionWasEquals stays true, iterationTemplate unchanged
             } catch (Exception e) {
                 errorMessage.setValue(e.getMessage() != null ? e.getMessage() : "Error");
             }
