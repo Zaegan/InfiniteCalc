@@ -98,6 +98,12 @@ public class MainActivity extends AppCompatActivity {
             });
         });
 
+        viewModel.getRadianMode().observe(this, isRad -> {
+            TextView btn = findViewById(R.id.btn_rad_deg);
+            // Show what the button will switch TO (not current mode)
+            btn.setText(isRad ? "DEG" : "RAD");
+        });
+
         viewModel.getErrorMessage().observe(this, msg -> {
             if (msg != null) {
                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
@@ -155,6 +161,9 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_sqrt).setOnClickListener(v ->  { sync(); viewModel.insert("sqrt("); });
         findViewById(R.id.btn_paren).setOnClickListener(v -> { sync(); viewModel.smartParen(); });
         findViewById(R.id.btn_pi).setOnClickListener(v ->    { sync(); viewModel.insert("π"); });
+
+        // ── Angle mode toggle ─────────────────────────────────────────────────
+        findViewById(R.id.btn_rad_deg).setOnClickListener(v -> viewModel.toggleAngleMode());
 
         // ── Extended operators ────────────────────────────────────────────────
         findViewById(R.id.btn_percent).setOnClickListener(v -> { sync(); viewModel.insert("%"); });

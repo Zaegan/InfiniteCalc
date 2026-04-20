@@ -19,14 +19,27 @@ public class ExpressionEvaluator {
 
     // ── Public API ────────────────────────────────────────────────────────
 
-    /** Full evaluation — expression must be syntactically complete. */
+    /** Full evaluation in radians mode (default). */
     public static double evaluate(String expression,
                                    Map<String, Double> variables) throws Exception {
+        return evaluate(expression, variables, true);
+    }
+
+    /** Full evaluation — expression must be syntactically complete. */
+    public static double evaluate(String expression,
+                                   Map<String, Double> variables,
+                                   boolean useRadians) throws Exception {
         List<Token> tokens = tokenize(expression);
-        Parser p = new Parser(tokens, variables);
+        Parser p = new Parser(tokens, variables, useRadians);
         double result = p.parseExpression();
         if (p.pos < tokens.size()) throw new Exception("Unexpected token");
         return result;
+    }
+
+    /** Partial evaluation for live preview in radians mode (default). */
+    public static double evaluatePartial(String expression,
+                                          Map<String, Double> variables) throws Exception {
+        return evaluatePartial(expression, variables, true);
     }
 
     /**
@@ -34,7 +47,8 @@ public class ExpressionEvaluator {
      * Auto-closes any unmatched open parentheses before evaluating.
      */
     public static double evaluatePartial(String expression,
-                                          Map<String, Double> variables) throws Exception {
+                                          Map<String, Double> variables,
+                                          boolean useRadians) throws Exception {
         int open = 0;
         for (int i = 0; i < expression.length(); i++) {
             char c = expression.charAt(i);
@@ -44,10 +58,16 @@ public class ExpressionEvaluator {
         StringBuilder sb = new StringBuilder(expression);
         for (int i = 0; i < open; i++) sb.append(')');
         List<Token> tokens = tokenize(sb.toString());
-        Parser p = new Parser(tokens, variables);
+        Parser p = new Parser(tokens, variables, useRadians);
         double result = p.parseExpression();
         if (p.pos < tokens.size()) throw new Exception("Unexpected token");
         return result;
+    }
+
+    /** isValidPartial in radians mode (default). */
+    public static boolean isValidPartial(String expression,
+                                          Map<String, Double> variables) {
+        return isValidPartial(expression, variables, true);
     }
 
     /**
@@ -55,9 +75,9 @@ public class ExpressionEvaluator {
      * (i.e. it is a valid partial expression with no hard syntax errors).
      */
     public static boolean isValidPartial(String expression,
-                                          Map<String, Double> variables) {
+                                          Map<String, Double> variables,
+                                          boolean useRadians) {
         if (expression == null || expression.trim().isEmpty()) return false;
-        // Reject immediately if any ) appears without a matching (
         int depth = 0;
         for (int i = 0; i < expression.length(); i++) {
             char c = expression.charAt(i);
@@ -65,7 +85,7 @@ public class ExpressionEvaluator {
             else if (c == ')') { depth--; if (depth < 0) return false; }
         }
         try {
-            evaluatePartial(expression, variables);
+            evaluatePartial(expression, variables, useRadians);
             return true;
         } catch (Exception e) {
             return false;
@@ -172,11 +192,13 @@ public class ExpressionEvaluator {
     private static class Parser {
         final List<Token> tokens;
         final Map<String, Double> variables;
+        final boolean useRadians;
         int pos = 0;
 
-        Parser(List<Token> tokens, Map<String, Double> variables) {
+        Parser(List<Token> tokens, Map<String, Double> variables, boolean useRadians) {
             this.tokens = tokens;
             this.variables = variables != null ? variables : Collections.<String, Double>emptyMap();
+            this.useRadians = useRadians;
         }
 
         double parseExpression() throws Exception {
@@ -269,10 +291,11 @@ public class ExpressionEvaluator {
                     expect(TokenType.LPAREN, "( after function name");
                     double arg = parseExpression();
                     expect(TokenType.RPAREN, ") after function argument");
+                    double a = useRadians ? arg : Math.toRadians(arg);
                     switch (fn) {
-                        case FUNC_SIN:  return Math.sin(arg);
-                        case FUNC_COS:  return Math.cos(arg);
-                        case FUNC_TAN:  return Math.tan(arg);
+                        case FUNC_SIN:  return Math.sin(a);
+                        case FUNC_COS:  return Math.cos(a);
+                        case FUNC_TAN:  return Math.tan(a);
                         case FUNC_LN:
                             if (arg <= 0) throw new Exception("ln of non-positive number");
                             return Math.log(arg);

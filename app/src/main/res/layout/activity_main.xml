@@ -130,8 +130,14 @@
                         android:backgroundTint="#22103a" />
                 </LinearLayout>
 
-                <!-- Ext row 2: % | log | 10^ -->
+                <!-- Ext row 2: RAD/DEG | % | log | 10^ -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <Button android:id="@+id/btn_rad_deg"
+                        android:layout_width="0dp" android:layout_height="52dp"
+                        android:layout_weight="1" android:layout_margin="2dp"
+                        android:text="RAD" android:textColor="#80ffcc" android:textSize="12sp"
+                        android:textAllCaps="false"
+                        android:backgroundTint="#003a28" />
                     <Button android:id="@+id/btn_percent"
                         android:layout_width="0dp" android:layout_height="52dp"
                         android:layout_weight="1" android:layout_margin="2dp"
