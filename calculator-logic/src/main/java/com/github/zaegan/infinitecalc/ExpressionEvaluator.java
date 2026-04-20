@@ -89,6 +89,20 @@ public class ExpressionEvaluator {
                         && (Character.isDigit(expr.charAt(i)) || expr.charAt(i) == '.')) {
                     num.append(expr.charAt(i++));
                 }
+                // Scientific notation: consume e[+/-]digits as part of the number
+                if (i < expr.length() && (expr.charAt(i) == 'e' || expr.charAt(i) == 'E')) {
+                    int j = i + 1;
+                    if (j < expr.length() && (expr.charAt(j) == '+' || expr.charAt(j) == '-')) j++;
+                    if (j < expr.length() && Character.isDigit(expr.charAt(j))) {
+                        num.append(expr.charAt(i++)); // 'e'
+                        if (i < expr.length() && (expr.charAt(i) == '+' || expr.charAt(i) == '-')) {
+                            num.append(expr.charAt(i++)); // sign
+                        }
+                        while (i < expr.length() && Character.isDigit(expr.charAt(i))) {
+                            num.append(expr.charAt(i++));
+                        }
+                    }
+                }
                 try {
                     tokens.add(new Token(TokenType.NUMBER, Double.parseDouble(num.toString())));
                 } catch (NumberFormatException e) {
