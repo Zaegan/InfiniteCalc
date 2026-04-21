@@ -106,58 +106,63 @@
                 android:orientation="vertical"
                 android:visibility="gone">
 
-                <!-- Ext row 1: sin | cos | tan | ln -->
+                <!-- Ext row 1: 4 remappable content buttons -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <Button android:id="@+id/btn_sin"
+                    <Button android:id="@+id/btn_ext_0"
                         android:layout_width="0dp" android:layout_height="52dp"
                         android:layout_weight="1" android:layout_margin="2dp"
-                        android:text="sin" android:textColor="#d0a0ff" android:textSize="13sp"
+                        android:textColor="#d0a0ff" android:textSize="13sp"
+                        android:textAllCaps="false"
                         android:backgroundTint="#22103a" />
-                    <Button android:id="@+id/btn_cos"
+                    <Button android:id="@+id/btn_ext_1"
                         android:layout_width="0dp" android:layout_height="52dp"
                         android:layout_weight="1" android:layout_margin="2dp"
-                        android:text="cos" android:textColor="#d0a0ff" android:textSize="13sp"
+                        android:textColor="#d0a0ff" android:textSize="13sp"
+                        android:textAllCaps="false"
                         android:backgroundTint="#22103a" />
-                    <Button android:id="@+id/btn_tan"
+                    <Button android:id="@+id/btn_ext_2"
                         android:layout_width="0dp" android:layout_height="52dp"
                         android:layout_weight="1" android:layout_margin="2dp"
-                        android:text="tan" android:textColor="#d0a0ff" android:textSize="13sp"
+                        android:textColor="#d0a0ff" android:textSize="13sp"
+                        android:textAllCaps="false"
                         android:backgroundTint="#22103a" />
-                    <Button android:id="@+id/btn_ln"
+                    <Button android:id="@+id/btn_ext_3"
                         android:layout_width="0dp" android:layout_height="52dp"
                         android:layout_weight="1" android:layout_margin="2dp"
-                        android:text="ln" android:textColor="#d0a0ff" android:textSize="13sp"
+                        android:textColor="#d0a0ff" android:textSize="13sp"
+                        android:textAllCaps="false"
                         android:backgroundTint="#22103a" />
                 </LinearLayout>
 
-                <!-- Ext row 2: RAD/DEG | % | log | 10^ -->
+                <!-- Ext row 2: ← (permanent) | 2 remappable | → (permanent) -->
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <Button android:id="@+id/btn_rad_deg"
+                    <Button android:id="@+id/btn_ext_prev"
                         android:layout_width="0dp" android:layout_height="52dp"
                         android:layout_weight="1" android:layout_margin="2dp"
-                        android:text="RAD" android:textColor="#80ffcc" android:textSize="12sp"
+                        android:text="‹" android:textColor="#80aabb" android:textSize="18sp"
+                        android:backgroundTint="#1a2a30" />
+                    <Button android:id="@+id/btn_ext_4"
+                        android:layout_width="0dp" android:layout_height="52dp"
+                        android:layout_weight="1" android:layout_margin="2dp"
+                        android:textColor="#d0a0ff" android:textSize="13sp"
                         android:textAllCaps="false"
-                        android:backgroundTint="#003a28" />
-                    <Button android:id="@+id/btn_percent"
-                        android:layout_width="0dp" android:layout_height="52dp"
-                        android:layout_weight="1" android:layout_margin="2dp"
-                        android:text="%" android:textColor="#80c8ff" android:textSize="17sp"
-                        android:backgroundTint="#0e2840" />
-                    <Button android:id="@+id/btn_log"
-                        android:layout_width="0dp" android:layout_height="52dp"
-                        android:layout_weight="1" android:layout_margin="2dp"
-                        android:text="log" android:textColor="#d0a0ff" android:textSize="13sp"
                         android:backgroundTint="#22103a" />
-                    <Button android:id="@+id/btn_10pow"
+                    <Button android:id="@+id/btn_ext_5"
                         android:layout_width="0dp" android:layout_height="52dp"
                         android:layout_weight="1" android:layout_margin="2dp"
-                        android:text="10^" android:textColor="#80c8ff" android:textSize="13sp"
-                        android:backgroundTint="#0e2840" />
+                        android:textColor="#d0a0ff" android:textSize="13sp"
+                        android:textAllCaps="false"
+                        android:backgroundTint="#22103a" />
+                    <Button android:id="@+id/btn_ext_next"
+                        android:layout_width="0dp" android:layout_height="52dp"
+                        android:layout_weight="1" android:layout_margin="2dp"
+                        android:text="›" android:textColor="#80aabb" android:textSize="18sp"
+                        android:backgroundTint="#1a2a30" />
                 </LinearLayout>
 
             </LinearLayout>
 
-            <!-- Permanent row: ^ | √ | () | π -->
+            <!-- Basic row 1: ^ | √ | () | π -->
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                 <Button android:id="@+id/btn_pow"
                     android:layout_width="0dp" android:layout_height="52dp"

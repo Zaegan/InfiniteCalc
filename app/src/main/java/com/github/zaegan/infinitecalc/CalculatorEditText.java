@@ -86,8 +86,8 @@ public class CalculatorEditText extends AppCompatEditText {
             if (c <= ' ') continue;
             // Digits and decimal point
             if (Character.isDigit(c) || c == '.') { sb.append(c); continue; }
-            // ASCII operators and parentheses
-            if (c == '+' || c == '^' || c == '%' || c == '(' || c == ')') {
+            // ASCII operators, parentheses, and function-argument separator
+            if (c == '+' || c == '^' || c == '%' || c == '!' || c == '(' || c == ')' || c == ',') {
                 sb.append(c); continue;
             }
             // Unicode operators / symbols already in evaluator form

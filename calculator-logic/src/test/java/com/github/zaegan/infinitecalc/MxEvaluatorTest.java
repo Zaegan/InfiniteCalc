@@ -7,20 +7,20 @@ import java.util.Map;
 
 import static org.junit.Assert.*;
 
-public class ExpressionEvaluatorTest {
+public class MxEvaluatorTest {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private double eval(String expr) throws Exception {
-        return ExpressionEvaluator.evaluate(expr, null);
+        return MxEvaluator.evaluate(expr, null);
     }
 
     private double evalVars(String expr, Map<String, Double> vars) throws Exception {
-        return ExpressionEvaluator.evaluate(expr, vars);
+        return MxEvaluator.evaluate(expr, vars);
     }
 
     private double partial(String expr) throws Exception {
-        return ExpressionEvaluator.evaluatePartial(expr, null);
+        return MxEvaluator.evaluatePartial(expr, null);
     }
 
     // ── Basic arithmetic ─────────────────────────────────────────────────────
@@ -50,13 +50,12 @@ public class ExpressionEvaluatorTest {
     }
 
     @Test public void modulo() throws Exception {
-        assertEquals(1.0, eval("10%3"), 1e-10);
+        assertEquals(1.0, eval("mod(10,3)"), 1e-10);
     }
 
     // ── Precedence and associativity ─────────────────────────────────────────
 
     @Test public void addThenMultiply() throws Exception {
-        // 2 + 3 * 4 = 14, not 20
         assertEquals(14.0, eval("2+3*4"), 1e-10);
     }
 
@@ -65,7 +64,6 @@ public class ExpressionEvaluatorTest {
     }
 
     @Test public void powerRightAssociative() throws Exception {
-        // 2^3^2 should be 2^(3^2) = 2^9 = 512
         assertEquals(512.0, eval("2^3^2"), 1e-10);
     }
 
@@ -175,21 +173,27 @@ public class ExpressionEvaluatorTest {
 
     @Test public void allVariableNames() throws Exception {
         Map<String, Double> vars = new HashMap<>();
-        for (char c = 'A'; c <= 'H'; c++) vars.put(String.valueOf(c), (double)(c - 'A' + 1));
-        // A=1, B=2, ..., H=8
-        assertEquals(1.0, evalVars("A", vars), 1e-10);
-        assertEquals(8.0, evalVars("H", vars), 1e-10);
+        for (char c = 'A'; c <= 'Z'; c++) vars.put(String.valueOf(c), (double)(c - 'A' + 1));
+        assertEquals(1.0,  evalVars("A", vars), 1e-10);
+        assertEquals(3.0,  evalVars("C", vars), 1e-10); // C would conflict with mXparser C(n,k)
+        assertEquals(26.0, evalVars("Z", vars), 1e-10);
+    }
+
+    @Test public void variableDoesNotConflictWithBuiltins() throws Exception {
+        // All 26 variables in the map; ncr/npr must still work as built-in functions
+        Map<String, Double> vars = new HashMap<>();
+        for (char c = 'A'; c <= 'Z'; c++) vars.put(String.valueOf(c), (double)(c - 'A' + 1));
+        assertEquals(10.0, evalVars("ncr(5,2)", vars), 1e-10);
+        assertEquals(20.0, evalVars("npr(5,2)", vars), 1e-10);
     }
 
     // ── Partial evaluation ───────────────────────────────────────────────────
 
     @Test public void partialAutoClosesOneParen() throws Exception {
-        // "sin(1" → auto-closes to "sin(1)" = sin(1)
         assertEquals(Math.sin(1), partial("sin(1"), 1e-10);
     }
 
     @Test public void partialAutoClosesNestedParens() throws Exception {
-        // "(1+2" → "(1+2)" = 3
         assertEquals(3.0, partial("(1+2"), 1e-10);
     }
 
@@ -198,15 +202,149 @@ public class ExpressionEvaluatorTest {
     }
 
     @Test public void isValidPartialRejectsUnmatchedClose() {
-        assertFalse(ExpressionEvaluator.isValidPartial("2+3)", null));
+        assertFalse(MxEvaluator.isValidPartial("2+3)", null));
     }
 
     @Test public void isValidPartialAcceptsGoodExpr() {
-        assertTrue(ExpressionEvaluator.isValidPartial("2+3", null));
+        assertTrue(MxEvaluator.isValidPartial("2+3", null));
     }
 
     @Test public void isValidPartialAcceptsOpenParen() {
-        assertTrue(ExpressionEvaluator.isValidPartial("sin(1", null));
+        assertTrue(MxEvaluator.isValidPartial("sin(1", null));
+    }
+
+    // ── Trig rounding ────────────────────────────────────────────────────────
+
+    @Test public void sinPiSnapsToZero() throws Exception {
+        assertEquals(0.0, eval("sin(π)"), 0.0);
+    }
+
+    @Test public void cosPiSnapsToMinusOne() throws Exception {
+        assertEquals(-1.0, eval("cos(π)"), 0.0);
+    }
+
+    // ── Inverse trig (radians) ───────────────────────────────────────────────
+
+    @Test public void asinHalf() throws Exception {
+        assertEquals(Math.PI / 6, eval("asin(0.5)"), 1e-10);
+    }
+
+    @Test public void acosOne() throws Exception {
+        assertEquals(0.0, eval("acos(1)"), 1e-10);
+    }
+
+    @Test public void atanOne() throws Exception {
+        assertEquals(Math.PI / 4, eval("atan(1)"), 1e-10);
+    }
+
+    // ── Inverse trig (degrees) ───────────────────────────────────────────────
+
+    @Test public void asinHalfDeg() throws Exception {
+        assertEquals(30.0, MxEvaluator.evaluate("asin(0.5)", null, false), 1e-10);
+    }
+
+    @Test public void acosHalfDeg() throws Exception {
+        assertEquals(60.0, MxEvaluator.evaluate("acos(0.5)", null, false), 1e-10);
+    }
+
+    @Test public void atan1Deg() throws Exception {
+        assertEquals(45.0, MxEvaluator.evaluate("atan(1)", null, false), 1e-10);
+    }
+
+    // ── Hyperbolic functions ─────────────────────────────────────────────────
+
+    @Test public void sinhZero() throws Exception {
+        assertEquals(0.0, eval("sinh(0)"), 1e-10);
+    }
+
+    @Test public void coshZero() throws Exception {
+        assertEquals(1.0, eval("cosh(0)"), 1e-10);
+    }
+
+    @Test public void tanhZero() throws Exception {
+        assertEquals(0.0, eval("tanh(0)"), 1e-10);
+    }
+
+    // ── exp / cbrt ───────────────────────────────────────────────────────────
+
+    @Test public void expOne() throws Exception {
+        assertEquals(Math.E, eval("exp(1)"), 1e-10);
+    }
+
+    @Test public void cbrtEight() throws Exception {
+        assertEquals(2.0, eval("cbrt(8)"), 1e-10);
+    }
+
+    @Test public void cbrtNegativeEight() throws Exception {
+        assertEquals(-2.0, eval("cbrt(-8)"), 1e-10);
+    }
+
+    // ── abs / round / floor / ceil ───────────────────────────────────────────
+
+    @Test public void absNegative() throws Exception {
+        assertEquals(5.0, eval("abs(-5)"), 1e-10);
+    }
+
+    @Test public void roundHalf() throws Exception {
+        assertEquals(3.0, eval("round(2.5,0)"), 1e-10);
+    }
+
+    @Test public void floorPositive() throws Exception {
+        assertEquals(2.0, eval("floor(2.9)"), 1e-10);
+    }
+
+    @Test public void ceilPositive() throws Exception {
+        assertEquals(3.0, eval("ceil(2.1)"), 1e-10);
+    }
+
+    // ── log2 ─────────────────────────────────────────────────────────────────
+
+    @Test public void log2ofEight() throws Exception {
+        assertEquals(3.0, eval("log2(8)"), 1e-10);
+    }
+
+    // ── Two-arg: logn ────────────────────────────────────────────────────────
+
+    @Test public void lognBase3Of27() throws Exception {
+        assertEquals(3.0, eval("logn(3,27)"), 1e-10);
+    }
+
+    @Test public void lognBase10Of100() throws Exception {
+        assertEquals(2.0, eval("logn(10,100)"), 1e-10);
+    }
+
+    // ── Two-arg: nthrt ───────────────────────────────────────────────────────
+
+    @Test public void nthrtCubeRoot() throws Exception {
+        assertEquals(2.0, eval("nthrt(3,8)"), 1e-10);
+    }
+
+    @Test public void nthrtNegativeOddRoot() throws Exception {
+        assertEquals(-2.0, eval("nthrt(3,-8)"), 1e-10);
+    }
+
+    // ── Factorial ────────────────────────────────────────────────────────────
+
+    @Test public void factZero() throws Exception {
+        assertEquals(1.0, eval("0!"), 1e-10);
+    }
+
+    @Test public void factFive() throws Exception {
+        assertEquals(120.0, eval("5!"), 1e-10);
+    }
+
+    // ── Two-arg: ncr / npr ───────────────────────────────────────────────────
+
+    @Test public void ncrFiveChooseTwo() throws Exception {
+        assertEquals(10.0, eval("ncr(5,2)"), 1e-10);
+    }
+
+    @Test public void ncrNChoose0() throws Exception {
+        assertEquals(1.0, eval("ncr(7,0)"), 1e-10);
+    }
+
+    @Test public void nprFivePermTwo() throws Exception {
+        assertEquals(20.0, eval("npr(5,2)"), 1e-10);
     }
 
     // ── Error cases ──────────────────────────────────────────────────────────
@@ -216,7 +354,7 @@ public class ExpressionEvaluatorTest {
     }
 
     @Test(expected = Exception.class) public void moduloByZero() throws Exception {
-        eval("5%0");
+        eval("mod(5,0)");
     }
 
     @Test(expected = Exception.class) public void sqrtOfNegative() throws Exception {
@@ -248,7 +386,7 @@ public class ExpressionEvaluatorTest {
     }
 
     @Test(expected = Exception.class) public void unexpectedToken() throws Exception {
-        eval("5 3");
+        eval("5+(");
     }
 
     @Test(expected = Exception.class) public void emptyExpression() throws Exception {
@@ -257,5 +395,17 @@ public class ExpressionEvaluatorTest {
 
     @Test(expected = Exception.class) public void unmatchedCloseParen() throws Exception {
         eval("5+3)");
+    }
+
+    @Test(expected = Exception.class) public void asinOutOfDomain() throws Exception {
+        eval("asin(2)");
+    }
+
+    @Test(expected = Exception.class) public void log2OfZero() throws Exception {
+        eval("log2(0)");
+    }
+
+    @Test(expected = Exception.class) public void nthrtEvenRootOfNegative() throws Exception {
+        eval("nthrt(2,-4)");
     }
 }

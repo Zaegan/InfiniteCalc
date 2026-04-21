@@ -41,9 +41,19 @@ public class CalculatorState {
      * Insert text at the current cursor position.
      *
      * Automatically prepends × when inserting a function call, constant,
-     * or variable name immediately after a digit, closing paren, π, or A–H.
+     * or variable name immediately after a digit, closing paren, π, or A–Z.
      */
     public void insert(String text) {
+        // Minus-toggle: if inserting '−' and there is already a unary '−' directly
+        // before the cursor, remove it instead of stacking another minus sign.
+        if (text.equals("\u2212") && cursor > 0
+                && expr.charAt(cursor - 1) == '\u2212'
+                && isUnaryAt(expr.toString(), cursor - 1)) {
+            expr.deleteCharAt(cursor - 1);
+            cursor--;
+            return;
+        }
+
         if (text.length() == 1 && isNonMinusOperator(text.charAt(0))) {
             while (cursor > 0 && isOperatorChar(expr.charAt(cursor - 1))) {
                 expr.deleteCharAt(cursor - 1);
@@ -60,6 +70,13 @@ public class CalculatorState {
                     || text.startsWith("tan(") || text.startsWith("ln(")
                     || text.startsWith("log(") || text.startsWith("sqrt(")
                     || text.startsWith("√(")
+                    || text.startsWith("asin(") || text.startsWith("acos(") || text.startsWith("atan(")
+                    || text.startsWith("sinh(") || text.startsWith("cosh(") || text.startsWith("tanh(")
+                    || text.startsWith("exp(") || text.startsWith("cbrt(") || text.startsWith("nthrt(")
+                    || text.startsWith("abs(") || text.startsWith("round(")
+                    || text.startsWith("floor(") || text.startsWith("ceil(")
+                    || text.startsWith("log2(") || text.startsWith("logn(")
+                    || text.startsWith("mod(") || text.startsWith("ncr(") || text.startsWith("npr(")
                     || text.equals("π") || text.equals("e")
                     || (text.length() == 1 && (
                             (text.charAt(0) >= 'A' && text.charAt(0) <= 'Z')
@@ -79,7 +96,14 @@ public class CalculatorState {
      */
     public void backspace() {
         if (cursor == 0) return;
-        String[] multiTokens = {"sin(", "cos(", "tan(", "log(", "ln(", "sqrt(", "√("};
+        String[] multiTokens = {
+            "asin(", "acos(", "atan(",
+            "sinh(", "cosh(", "tanh(",
+            "nthrt(", "round(", "floor(", "ceil(",
+            "sqrt(", "cbrt(", "logn(", "log2(", "log(", "ln(",
+            "ncr(", "npr(", "mod(",
+            "exp(", "abs(", "sin(", "cos(", "tan(", "√("
+        };
         String before = expr.substring(0, cursor);
         for (String token : multiTokens) {
             if (before.endsWith(token)) {
@@ -130,6 +154,38 @@ public class CalculatorState {
         }
     }
 
+    /**
+     * Smart negation: find the number at/around the cursor and toggle its sign.
+     */
+    public void smartNegate() {
+        String s = expr.toString();
+        int len = s.length();
+
+        int numStart = cursor;
+        while (numStart > 0 && (Character.isDigit(s.charAt(numStart - 1))
+                || s.charAt(numStart - 1) == '.')) {
+            numStart--;
+        }
+
+        if (numStart == cursor) {
+            int fwd = cursor;
+            while (fwd < len && (Character.isDigit(s.charAt(fwd)) || s.charAt(fwd) == '.')) {
+                fwd++;
+            }
+            if (fwd == cursor) return;
+            numStart = cursor;
+        }
+
+        if (numStart > 0 && s.charAt(numStart - 1) == '\u2212'
+                && isUnaryAt(s, numStart - 1)) {
+            expr.deleteCharAt(numStart - 1);
+            if (cursor > numStart - 1) cursor--;
+        } else {
+            expr.insert(numStart, '\u2212');
+            cursor++;
+        }
+    }
+
     // ── Operator helpers ────────────────────────────────────────────────────
 
     private static boolean isOperatorChar(char c) {
@@ -139,6 +195,13 @@ public class CalculatorState {
 
     private static boolean isNonMinusOperator(char c) {
         return c == '+' || c == '\u00D7' || c == '\u00F7' || c == '^' || c == '%';
+    }
+
+    private static boolean isUnaryAt(String s, int pos) {
+        if (pos == 0) return true;
+        char prev = s.charAt(pos - 1);
+        return prev == '+' || prev == '\u2212' || prev == '\u00D7' || prev == '\u00F7'
+                || prev == '^' || prev == '%' || prev == '(';
     }
 
     // ── Formatting ───────────────────────────────────────────────────────────

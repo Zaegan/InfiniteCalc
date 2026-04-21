@@ -266,6 +266,83 @@ public class CalculatorStateTest {
         assertEquals("((1+2))", s.getExpression());
     }
 
+    // ── minus-toggle (insert − when unary − is before cursor) ───────────────
+
+    @Test public void minusToggleRemovesUnaryMinus() {
+        // "−5": cursor at end, inserting − again removes the existing one
+        s.insert("\u2212");
+        s.insert("5");
+        s.syncCursor(1); // cursor right after the '−'
+        s.insert("\u2212");
+        assertEquals("5", s.getExpression());
+        assertEquals(0, s.getCursor());
+    }
+
+    @Test public void minusAfterBinaryOperatorStacksNormally() {
+        // "5+": inserting − should give "5+−" (binary + unary), no toggle
+        s.insert("5");
+        s.insert("+");
+        s.insert("\u2212");
+        assertEquals("5+\u2212", s.getExpression());
+    }
+
+    @Test public void minusAtStartTogglesOff() {
+        s.insert("\u2212");
+        s.insert("\u2212"); // second minus at position 1, prev='−' which is unary → remove
+        assertEquals("", s.getExpression());
+    }
+
+    // ── smartNegate ──────────────────────────────────────────────────────────
+
+    @Test public void smartNegateAddsMinusBeforeNumber() {
+        s.insert("42");
+        s.smartNegate();
+        assertEquals("\u221242", s.getExpression());
+        assertEquals(3, s.getCursor());
+    }
+
+    @Test public void smartNegateRemovesExistingUnaryMinus() {
+        s.insert("\u2212");
+        s.insert("42");
+        s.smartNegate(); // cursor at end, prev digits → remove −
+        assertEquals("42", s.getExpression());
+        assertEquals(2, s.getCursor());
+    }
+
+    @Test public void smartNegateCursorInsideNumber() {
+        s.insert("42");
+        s.syncCursor(1); // cursor between '4' and '2'
+        s.smartNegate();
+        assertEquals("\u221242", s.getExpression());
+    }
+
+    @Test public void smartNegateCursorAtStartOfNumber() {
+        s.insert("42");
+        s.syncCursor(0);
+        s.smartNegate(); // no digits before cursor, scan forward finds "42"
+        assertEquals("\u221242", s.getExpression());
+    }
+
+    @Test public void smartNegateDoesNothingWithNoCursorDigit() {
+        s.insert("2+");
+        s.smartNegate(); // cursor at end, after '+', no digits ahead
+        assertEquals("2+", s.getExpression());
+    }
+
+    @Test public void smartNegateInMiddleOfExpression() {
+        s.insert("2+5");
+        s.syncCursor(3); // cursor at end, "5" is the number
+        s.smartNegate();
+        assertEquals("2+\u22125", s.getExpression());
+    }
+
+    @Test public void smartNegateRemovesInMiddleOfExpression() {
+        s.insert("2+\u22125");
+        s.syncCursor(4); // after '5'
+        s.smartNegate(); // prev chars: cursor backs over '5', numStart=3, prev='−' unary (after '+')
+        assertEquals("2+5", s.getExpression());
+    }
+
     // ── clear / setExpression ────────────────────────────────────────────────
 
     @Test public void clearResetsState() {

@@ -3,6 +3,9 @@ package com.github.zaegan.infinitecalc;
 /**
  * Pure-Java state machine for the calculator's expression input.
  * No Android dependencies — fully testable with plain JUnit.
+ *
+ * Holds the current expression string and the cursor position within it.
+ * All mutation methods update both atomically.
  */
 public class CalculatorState {
 
@@ -14,16 +17,19 @@ public class CalculatorState {
     public String getExpression() { return expr.toString(); }
     public int getCursor() { return cursor; }
 
+    /** Clamp and store a cursor position received from the UI. */
     public void syncCursor(int pos) {
         cursor = Math.max(0, Math.min(pos, expr.length()));
     }
 
+    /** Replace the entire expression (e.g. when restoring a history entry). */
     public void setExpression(String s) {
         expr.setLength(0);
         expr.append(s == null ? "" : s);
         cursor = expr.length();
     }
 
+    /** Clear the expression and reset the cursor to 0. */
     public void clear() {
         expr.setLength(0);
         cursor = 0;
@@ -31,10 +37,23 @@ public class CalculatorState {
 
     // ── Input mutations ──────────────────────────────────────────────────────
 
+    /**
+     * Insert text at the current cursor position.
+     *
+     * Automatically prepends × when inserting a function call, constant,
+     * or variable name immediately after a digit, closing paren, π, or A–Z.
+     */
     public void insert(String text) {
-        // Operator replacement: if inserting a non-minus binary operator, delete any
-        // consecutive operators immediately before the cursor so e.g. "5+" → "×" → "5×".
-        // The minus sign is excluded because it doubles as unary negative.
+        // Minus-toggle: if inserting '−' and there is already a unary '−' directly
+        // before the cursor, remove it instead of stacking another minus sign.
+        if (text.equals("\u2212") && cursor > 0
+                && expr.charAt(cursor - 1) == '\u2212'
+                && isUnaryAt(expr.toString(), cursor - 1)) {
+            expr.deleteCharAt(cursor - 1);
+            cursor--;
+            return;
+        }
+
         if (text.length() == 1 && isNonMinusOperator(text.charAt(0))) {
             while (cursor > 0 && isOperatorChar(expr.charAt(cursor - 1))) {
                 expr.deleteCharAt(cursor - 1);
@@ -51,6 +70,13 @@ public class CalculatorState {
                     || text.startsWith("tan(") || text.startsWith("ln(")
                     || text.startsWith("log(") || text.startsWith("sqrt(")
                     || text.startsWith("√(")
+                    || text.startsWith("asin(") || text.startsWith("acos(") || text.startsWith("atan(")
+                    || text.startsWith("sinh(") || text.startsWith("cosh(") || text.startsWith("tanh(")
+                    || text.startsWith("exp(") || text.startsWith("cbrt(") || text.startsWith("nthrt(")
+                    || text.startsWith("abs(") || text.startsWith("round(")
+                    || text.startsWith("floor(") || text.startsWith("ceil(")
+                    || text.startsWith("log2(") || text.startsWith("logn(")
+                    || text.startsWith("mod(") || text.startsWith("ncr(") || text.startsWith("npr(")
                     || text.equals("π") || text.equals("e")
                     || (text.length() == 1 && (
                             (text.charAt(0) >= 'A' && text.charAt(0) <= 'Z')
@@ -64,9 +90,20 @@ public class CalculatorState {
         cursor += text.length();
     }
 
+    /**
+     * Delete the token immediately before the cursor.
+     * Multi-character function tokens (e.g. "sin(") are deleted as a single unit.
+     */
     public void backspace() {
         if (cursor == 0) return;
-        String[] multiTokens = {"sin(", "cos(", "tan(", "log(", "ln(", "sqrt(", "√("};
+        String[] multiTokens = {
+            "asin(", "acos(", "atan(",
+            "sinh(", "cosh(", "tanh(",
+            "nthrt(", "round(", "floor(", "ceil(",
+            "sqrt(", "cbrt(", "logn(", "log2(", "log(", "ln(",
+            "ncr(", "npr(", "mod(",
+            "exp(", "abs(", "sin(", "cos(", "tan(", "√("
+        };
         String before = expr.substring(0, cursor);
         for (String token : multiTokens) {
             if (before.endsWith(token)) {
@@ -79,6 +116,15 @@ public class CalculatorState {
         cursor--;
     }
 
+    /**
+     * Smart parenthesis logic:
+     * <ul>
+     *   <li>Insert ) if there is an unmatched ( before the cursor
+     *       AND the character immediately before the cursor is not (.</li>
+     *   <li>Otherwise insert ( — with an automatic × prefix when the
+     *       preceding character is a digit or ).</li>
+     * </ul>
+     */
     public void smartParen() {
         String before = expr.substring(0, cursor);
         int depth = 0;
@@ -88,10 +134,6 @@ public class CalculatorState {
         }
         char prev = before.isEmpty() ? 0 : before.charAt(before.length() - 1);
 
-        // A "value" ending: digit, close-paren, constants (π, e), or variables (A–Z, α, β).
-        // After any of these a second paren either closes an open group or opens with ×.
-        // After an operator, '(', or at the start the paren MUST open — the operator
-        // needs an operand and there is no other way to express that intent.
         boolean prevIsValue = prev != 0
                 && (Character.isDigit(prev) || prev == ')'
                     || prev == 'π' || prev == 'e'
@@ -107,8 +149,39 @@ public class CalculatorState {
                 cursor += 2;
             }
         } else {
-            // After operator, '(', or at start of expression → must open
             expr.insert(cursor, "(");
+            cursor++;
+        }
+    }
+
+    /**
+     * Smart negation: find the number at/around the cursor and toggle its sign.
+     */
+    public void smartNegate() {
+        String s = expr.toString();
+        int len = s.length();
+
+        int numStart = cursor;
+        while (numStart > 0 && (Character.isDigit(s.charAt(numStart - 1))
+                || s.charAt(numStart - 1) == '.')) {
+            numStart--;
+        }
+
+        if (numStart == cursor) {
+            int fwd = cursor;
+            while (fwd < len && (Character.isDigit(s.charAt(fwd)) || s.charAt(fwd) == '.')) {
+                fwd++;
+            }
+            if (fwd == cursor) return;
+            numStart = cursor;
+        }
+
+        if (numStart > 0 && s.charAt(numStart - 1) == '\u2212'
+                && isUnaryAt(s, numStart - 1)) {
+            expr.deleteCharAt(numStart - 1);
+            if (cursor > numStart - 1) cursor--;
+        } else {
+            expr.insert(numStart, '\u2212');
             cursor++;
         }
     }
@@ -120,9 +193,15 @@ public class CalculatorState {
                 || c == '^' || c == '%';
     }
 
-    /** True for binary operators other than minus (minus can be unary). */
     private static boolean isNonMinusOperator(char c) {
         return c == '+' || c == '\u00D7' || c == '\u00F7' || c == '^' || c == '%';
+    }
+
+    private static boolean isUnaryAt(String s, int pos) {
+        if (pos == 0) return true;
+        char prev = s.charAt(pos - 1);
+        return prev == '+' || prev == '\u2212' || prev == '\u00D7' || prev == '\u00F7'
+                || prev == '^' || prev == '%' || prev == '(';
     }
 
     // ── Formatting ───────────────────────────────────────────────────────────

@@ -129,6 +129,13 @@ public class CalculatorViewModel extends AndroidViewModel {
         updateDisplay();
     }
 
+    public void smartNegate() {
+        exitVarMode();
+        resetIterationState();
+        state.smartNegate();
+        updateDisplay();
+    }
+
     // ── Evaluation ──────────────────────────────────────────────────────────
 
     /**
@@ -152,7 +159,7 @@ public class CalculatorViewModel extends AndroidViewModel {
             String newExpr = currentResult + iterationTemplate;
             try {
                 Map<String, Double> vars = loadVariables();
-                double result = ExpressionEvaluator.evaluate(newExpr, vars, useRadians);
+                double result = MxEvaluator.evaluate(newExpr, vars, useRadians);
                 String resultStr = CalculatorState.formatResult(result);
 
                 // Build a NEW HistoryGroup (same timestamp) with the added step so that
@@ -181,7 +188,7 @@ public class CalculatorViewModel extends AndroidViewModel {
             // ── First = press (or after an edit) ──
             try {
                 Map<String, Double> vars = loadVariables();
-                double result = ExpressionEvaluator.evaluate(expression, vars, useRadians);
+                double result = MxEvaluator.evaluate(expression, vars, useRadians);
                 String resultStr = CalculatorState.formatResult(result);
 
                 addDraftStep(expression, resultStr);
@@ -252,7 +259,7 @@ public class CalculatorViewModel extends AndroidViewModel {
         if (mode == VarMode.STO) {
             try {
                 Map<String, Double> vars = loadVariables();
-                double val = ExpressionEvaluator.evaluatePartial(state.getExpression(), vars, useRadians);
+                double val = MxEvaluator.evaluatePartial(state.getExpression(), vars, useRadians);
                 prefs.edit().putFloat(varName, (float) val).apply();
             } catch (Exception ignored) {}
             exitVarMode();
@@ -339,12 +346,12 @@ public class CalculatorViewModel extends AndroidViewModel {
         }
         try {
             Map<String, Double> vars = loadVariables();
-            double partialResult = ExpressionEvaluator.evaluatePartial(expression, vars, useRadians);
+            double partialResult = MxEvaluator.evaluatePartial(expression, vars, useRadians);
             String resultStr = CalculatorState.formatResult(partialResult);
             previewText.setValue("= " + resultStr);
 
             try {
-                ExpressionEvaluator.evaluate(expression, vars, useRadians);
+                MxEvaluator.evaluate(expression, vars, useRadians);
                 addDraftStep(expression, resultStr);
             } catch (Exception ignored) {}
 

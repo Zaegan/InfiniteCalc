@@ -32,6 +32,42 @@ public class MainActivity extends AppCompatActivity {
     private CalculatorEditText expressionDisplay;
     private boolean extendedMode = false;
 
+    // ── Extended panel paging ─────────────────────────────────────────────────
+
+    /**
+     * Insert text for each of the 6 remappable slots per extended page.
+     * Slots 0–3 fill row 1; slots 4–5 fill the middle of row 2 (between ‹ and ›).
+     *
+     * Sentinels (handled specially in bindExtPage):
+     *   "RAD_DEG" → toggleAngleMode(), text = current mode label
+     *   "NEGATE"  → smartNegate()
+     *   "SETTINGS"→ placeholder (future settings screen)
+     *   "REMAP"   → placeholder (future remapping screen)
+     */
+    private static final String[][] EXT_INSERT = {
+        // Page 0 — default first page (matches spec)
+        {"sin(", "cos(", "tan(", "RAD_DEG",   "ln(", "log("},
+        // Page 1 — logs & roots
+        {"log2(", "logn(", "exp(", "sqrt(",    "cbrt(", "nthrt("},
+        // Page 2 — powers & combinatorics
+        {"^2", "^3", "abs(", "mod(",           "!", "ncr("},
+        // Page 3 — misc & inverse trig
+        {"npr(", "round(", "asin(", "acos(",   "atan(", "NEGATE"},
+        // Page 4 — hyperbolic & access
+        {"sinh(", "cosh(", "tanh(", "10^(",    "SETTINGS", "REMAP"},
+    };
+
+    private static final String[][] EXT_LABELS = {
+        {"sin", "cos", "tan", "RAD",           "ln", "log"},
+        {"log₂", "logₙ", "exp", "√",          "∛", "ⁿ√"},
+        {"x²", "x³", "abs", "mod",             "n!", "nCr"},
+        {"nPr", "rnd", "sin⁻¹", "cos⁻¹",     "tan⁻¹", "±"},
+        {"sinh", "cosh", "tanh", "10^",        "Settings", "Remap"},
+    };
+
+    private int currentExtPage = 0;
+    private android.widget.Button[] extButtons;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -107,9 +143,14 @@ public class MainActivity extends AppCompatActivity {
         });
 
         viewModel.getRadianMode().observe(this, isRad -> {
-            TextView btn = findViewById(R.id.btn_rad_deg);
-            // Show what the button will switch TO (not current mode)
-            btn.setText(isRad ? "DEG" : "RAD");
+            // If the current page contains the RAD/DEG slot, update its label live
+            String[] inserts = EXT_INSERT[currentExtPage];
+            for (int i = 0; i < extButtons.length; i++) {
+                if ("RAD_DEG".equals(inserts[i])) {
+                    extButtons[i].setText(isRad ? "DEG" : "RAD");
+                    break;
+                }
+            }
         });
 
         viewModel.getErrorMessage().observe(this, msg -> {
@@ -164,25 +205,25 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_multiply).setOnClickListener(v -> { sync(); viewModel.insert("\u00D7"); });
         findViewById(R.id.btn_divide).setOnClickListener(v ->   { sync(); viewModel.insert("\u00F7"); });
 
-        // ── Permanent row: ^ | √ | () | π ────────────────────────────────────
+        // ── Basic row 1: ^ | √ | () | π ─────────────────────────────────────
         findViewById(R.id.btn_pow).setOnClickListener(v ->   { sync(); viewModel.insert("^"); });
         findViewById(R.id.btn_sqrt).setOnClickListener(v ->  { sync(); viewModel.insert("sqrt("); });
         findViewById(R.id.btn_paren).setOnClickListener(v -> { sync(); viewModel.smartParen(); });
         findViewById(R.id.btn_pi).setOnClickListener(v ->    { sync(); viewModel.insert("π"); });
 
-        // ── Angle mode toggle ─────────────────────────────────────────────────
-        findViewById(R.id.btn_rad_deg).setOnClickListener(v -> viewModel.toggleAngleMode());
-
-        // ── Extended operators ────────────────────────────────────────────────
-        findViewById(R.id.btn_percent).setOnClickListener(v -> { sync(); viewModel.insert("%"); });
-        findViewById(R.id.btn_10pow).setOnClickListener(v ->   { sync(); viewModel.insert("10^"); });
-
-        // ── Scientific functions ──────────────────────────────────────────────
-        findViewById(R.id.btn_sin).setOnClickListener(v -> { sync(); viewModel.insert("sin("); });
-        findViewById(R.id.btn_cos).setOnClickListener(v -> { sync(); viewModel.insert("cos("); });
-        findViewById(R.id.btn_tan).setOnClickListener(v -> { sync(); viewModel.insert("tan("); });
-        findViewById(R.id.btn_ln).setOnClickListener(v ->  { sync(); viewModel.insert("ln("); });
-        findViewById(R.id.btn_log).setOnClickListener(v -> { sync(); viewModel.insert("log("); });
+        // ── Extended panel: paged function buttons ────────────────────────────
+        // Slots 0-3 → row 1; slots 4-5 → row 2 middle (between permanent ‹/›)
+        extButtons = new android.widget.Button[]{
+            findViewById(R.id.btn_ext_0), findViewById(R.id.btn_ext_1),
+            findViewById(R.id.btn_ext_2), findViewById(R.id.btn_ext_3),
+            findViewById(R.id.btn_ext_4), findViewById(R.id.btn_ext_5)
+        };
+        bindExtPage(0);
+        // ‹ and › are permanent — wired once here, never overwritten by bindExtPage
+        findViewById(R.id.btn_ext_prev).setOnClickListener(v ->
+            bindExtPage((currentExtPage - 1 + EXT_INSERT.length) % EXT_INSERT.length));
+        findViewById(R.id.btn_ext_next).setOnClickListener(v ->
+            bindExtPage((currentExtPage + 1) % EXT_INSERT.length));
 
         // ── Backspace / AC / = ────────────────────────────────────────────────
         findViewById(R.id.btn_backspace).setOnClickListener(v -> { sync(); viewModel.backspace(); });
@@ -225,6 +266,74 @@ public class MainActivity extends AppCompatActivity {
                 viewModel.onVariableTapped(varName);
             });
         }
+    }
+
+    // ── Extended panel paging ─────────────────────────────────────────────────
+
+    /** Two-arg function insert strings — pressing these triggers comma-mode. */
+    private static final java.util.Set<String> TWO_ARG_INSERTS = new java.util.HashSet<>(
+            java.util.Arrays.asList("logn(", "nthrt(", "ncr(", "npr(", "mod("));
+
+    private void bindExtPage(int page) {
+        currentExtPage = page;
+        Boolean isRad = viewModel.getRadianMode().getValue();
+        for (int i = 0; i < extButtons.length; i++) {
+            final String insert = EXT_INSERT[page][i];
+            final String label  = EXT_LABELS[page][i];
+            final android.widget.Button btn = extButtons[i];
+            switch (insert) {
+                case "RAD_DEG":
+                    btn.setText(isRad != null && isRad ? "DEG" : "RAD");
+                    btn.setOnClickListener(v -> viewModel.toggleAngleMode());
+                    break;
+                case "NEGATE":
+                    btn.setText(label);
+                    btn.setOnClickListener(v -> { sync(); viewModel.smartNegate(); });
+                    break;
+                case "SETTINGS":
+                    btn.setText(label);
+                    btn.setOnClickListener(v ->
+                        Toast.makeText(this, "Settings — coming soon", Toast.LENGTH_SHORT).show());
+                    break;
+                case "REMAP":
+                    btn.setText(label);
+                    btn.setOnClickListener(v ->
+                        Toast.makeText(this, "Remap — coming soon", Toast.LENGTH_SHORT).show());
+                    break;
+                default:
+                    btn.setText(label);
+                    if (TWO_ARG_INSERTS.contains(insert)) {
+                        btn.setOnClickListener(v -> {
+                            sync();
+                            viewModel.insert(insert);
+                            activateCommaMode(btn, insert, label);
+                        });
+                    } else {
+                        btn.setOnClickListener(v -> { sync(); viewModel.insert(insert); });
+                    }
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Transform a button into a one-shot comma key.
+     * The first press inserts ',' and reverts the button to its original function.
+     * Pressing the function again re-enters comma mode (for the next use).
+     */
+    private void activateCommaMode(android.widget.Button btn, String insert, String label) {
+        btn.setText(",");
+        btn.setOnClickListener(v -> {
+            sync();
+            viewModel.insert(",");
+            // Revert — re-wire so the next press of the same button enters comma mode again
+            btn.setText(label);
+            btn.setOnClickListener(v2 -> {
+                sync();
+                viewModel.insert(insert);
+                activateCommaMode(btn, insert, label);
+            });
+        });
     }
 
     // ── STO / REC active-mode highlight ──────────────────────────────────────
