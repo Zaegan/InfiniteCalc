@@ -33,13 +33,14 @@ public class MxEvaluatorTest {
         assertEquals("2+(-10)^2", MxEvaluator.applyCasioUnary("2+-10^2"));
     }
 
-    @Test public void casioUnaryAlreadyGroupedUnchanged() {
-        assertEquals("(-10)^2", MxEvaluator.applyCasioUnary("(-10)^2"));
+    @Test public void casioUnaryDoubleGroupHarmless() {
+        // Already-grouped (-10) gets wrapped again: ((-10))^2 = 100, still correct
+        assertEquals("((-10))^2", MxEvaluator.applyCasioUnary("(-10)^2"));
     }
 
-    @Test public void casioUnaryDoesNotWrapInsideParens() {
-        // -5 inside abs( — prev is '(' so no wrapping
-        assertEquals("abs(-5)", MxEvaluator.applyCasioUnary("abs(-5)"));
+    @Test public void casioUnaryInsideParens() {
+        // (-5^2+2)/2: Casio wraps the -5 inside the group → ((-5)^2+2)/2
+        assertEquals("((-5)^2+2)/2", MxEvaluator.applyCasioUnary("(-5^2+2)/2"));
     }
 
     @Test public void convertModuloSimple() {
@@ -123,6 +124,11 @@ public class MxEvaluatorTest {
 
     @Test public void casioUnaryInExpression() throws Exception {
         assertEquals(102.0, eval("2+-10^2"), 1e-10); // 2 + (-10)^2 = 2+100
+    }
+
+    @Test public void casioUnaryInsideGroup() throws Exception {
+        // (-5^2+2)/2 — Casio wraps -5 even inside parens → ((-5)^2+2)/2 = 27/2 = 13.5
+        assertEquals(13.5, eval("(-5^2+2)/2"), 1e-10);
     }
 
     @Test public void unaryMinus() throws Exception {

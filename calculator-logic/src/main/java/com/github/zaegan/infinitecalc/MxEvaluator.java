@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>Unicode operators (−×÷) → ASCII</li>
  *   <li>Casio unary: bare {@code -digits} at unary position → {@code (-digits)}
- *       (does not wrap when {@code -} follows {@code (})</li>
+ *       (unary positions: start, or after +, -, *, /, ^, ()</li>
  *   <li>% infix operator → {@code mod(left,right)}</li>
  *   <li>∛( → root(3,</li>
  *   <li>√( → sqrt(</li>
@@ -141,12 +141,12 @@ public class MxEvaluator {
 
     /**
      * Casio-style unary minus: wraps a bare {@code -digits} sequence in parens
-     * when the minus is at a unary position (start of string, or after an
-     * arithmetic operator), but NOT when it immediately follows {@code (}.
+     * whenever the minus is at a unary position (start of string, or after
+     * {@code +}, {@code -}, {@code *}, {@code /}, {@code ^}, or {@code (}).
      *
      * <p>Examples: {@code -10^2} → {@code (-10)^2};
      *              {@code 2+-10^2} → {@code 2+(-10)^2};
-     *              {@code (-10)^2} → unchanged (already grouped).
+     *              {@code (-5^2+2)/2} → {@code ((-5)^2+2)/2} = 13.5.
      */
     static String applyCasioUnary(String s) {
         StringBuilder sb = new StringBuilder(s.length());
@@ -171,12 +171,11 @@ public class MxEvaluator {
         return sb.toString();
     }
 
-    /** True when {@code pos} is a unary-minus position and not immediately after {@code (}. */
+    /** True when {@code pos} is a unary-minus position. */
     private static boolean isCasioUnaryPos(String s, int pos) {
         if (pos == 0) return true;
         char prev = s.charAt(pos - 1);
-        if (prev == '(') return false; // already inside explicit parens — don't double-wrap
-        return prev == '+' || prev == '-' || prev == '*' || prev == '/' || prev == '^';
+        return prev == '+' || prev == '-' || prev == '*' || prev == '/' || prev == '^' || prev == '(';
     }
 
     /**
