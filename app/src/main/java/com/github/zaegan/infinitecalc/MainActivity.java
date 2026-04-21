@@ -44,26 +44,31 @@ public class MainActivity extends AppCompatActivity {
      *   "SETTINGS"→ placeholder (future settings screen)
      *   "REMAP"   → placeholder (future remapping screen)
      */
-    private static final String[][] EXT_INSERT = {
-        // Page 0 — default first page (matches spec)
-        {"sin(", "cos(", "tan(", "RAD_DEG",   "ln(", "log("},
-        // Page 1 — logs & roots
-        {"log2(", "logn(", "exp(", "sqrt(",    "cbrt(", "nthrt("},
+    private static final java.util.ArrayList<String[]> EXT_INSERT =
+            new java.util.ArrayList<>(java.util.Arrays.asList(
+        // Page 0 — trig & basic functions
+        new String[]{"sin(", "cos(", "tan(", "RAD_DEG",       "ln(", "log("},
+        // Page 1 — logs & roots (5 items; sqrt is on the basic panel)
+        new String[]{"log2(", "logn(", "e", "\u221B(",         "nthrt("},
         // Page 2 — powers & combinatorics
-        {"^2", "^3", "abs(", "mod(",           "!", "ncr("},
-        // Page 3 — misc & inverse trig
-        {"npr(", "round(", "asin(", "acos(",   "atan(", "NEGATE"},
-        // Page 4 — hyperbolic & access
-        {"sinh(", "cosh(", "tanh(", "10^(",    "SETTINGS", "REMAP"},
-    };
+        new String[]{"^2", "^3", "abs(", "%",                  "!", "ncr("},
+        // Page 3 — misc, inverse trig & comma
+        new String[]{"npr(", "round(", "asin(", "acos(",       "atan(", ","},
+        // Page 4 — hyperbolic & negate
+        new String[]{"sinh(", "cosh(", "tanh(", "10^(",        "SETTINGS", "NEGATE"},
+        // Page 5 — remap & physical constants (4 items)
+        new String[]{"REMAP", "G\u2099", "k\u2091", "N\u2090"}
+    ));
 
-    private static final String[][] EXT_LABELS = {
-        {"sin", "cos", "tan", "RAD",           "ln", "log"},
-        {"log₂", "logₙ", "exp", "√",          "∛", "ⁿ√"},
-        {"x²", "x³", "abs", "mod",             "n!", "nCr"},
-        {"nPr", "rnd", "sin⁻¹", "cos⁻¹",     "tan⁻¹", "±"},
-        {"sinh", "cosh", "tanh", "10^",        "Settings", "Remap"},
-    };
+    private static final java.util.ArrayList<String[]> EXT_LABELS =
+            new java.util.ArrayList<>(java.util.Arrays.asList(
+        new String[]{"sin", "cos", "tan", "RAD",               "ln", "log"},
+        new String[]{"log₂", "logₙ", "e", "∛",                "ⁿ√"},
+        new String[]{"x²", "x³", "abs", "%",                  "n!", "nCr"},
+        new String[]{"nPr", "rnd", "sin⁻¹", "cos⁻¹",         "tan⁻¹", ","},
+        new String[]{"sinh", "cosh", "tanh", "10^",            "Settings", "±"},
+        new String[]{"Remap", "Gₙ", "kₑ", "Nₐ"}
+    ));
 
     private int currentExtPage = 0;
     private android.widget.Button[] extButtons;
@@ -144,8 +149,8 @@ public class MainActivity extends AppCompatActivity {
 
         viewModel.getRadianMode().observe(this, isRad -> {
             // If the current page contains the RAD/DEG slot, update its label live
-            String[] inserts = EXT_INSERT[currentExtPage];
-            for (int i = 0; i < extButtons.length; i++) {
+            String[] inserts = EXT_INSERT.get(currentExtPage);
+            for (int i = 0; i < extButtons.length && i < inserts.length; i++) {
                 if ("RAD_DEG".equals(inserts[i])) {
                     extButtons[i].setText(isRad ? "DEG" : "RAD");
                     break;
@@ -207,7 +212,7 @@ public class MainActivity extends AppCompatActivity {
 
         // ── Basic row 1: ^ | √ | () | π ─────────────────────────────────────
         findViewById(R.id.btn_pow).setOnClickListener(v ->   { sync(); viewModel.insert("^"); });
-        findViewById(R.id.btn_sqrt).setOnClickListener(v ->  { sync(); viewModel.insert("sqrt("); });
+        findViewById(R.id.btn_sqrt).setOnClickListener(v ->  { sync(); viewModel.insert("\u221A("); });
         findViewById(R.id.btn_paren).setOnClickListener(v -> { sync(); viewModel.smartParen(); });
         findViewById(R.id.btn_pi).setOnClickListener(v ->    { sync(); viewModel.insert("π"); });
 
@@ -221,9 +226,9 @@ public class MainActivity extends AppCompatActivity {
         bindExtPage(0);
         // ‹ and › are permanent — wired once here, never overwritten by bindExtPage
         findViewById(R.id.btn_ext_prev).setOnClickListener(v ->
-            bindExtPage((currentExtPage - 1 + EXT_INSERT.length) % EXT_INSERT.length));
+            bindExtPage((currentExtPage - 1 + EXT_INSERT.size()) % EXT_INSERT.size()));
         findViewById(R.id.btn_ext_next).setOnClickListener(v ->
-            bindExtPage((currentExtPage + 1) % EXT_INSERT.length));
+            bindExtPage((currentExtPage + 1) % EXT_INSERT.size()));
 
         // ── Backspace / AC / = ────────────────────────────────────────────────
         findViewById(R.id.btn_backspace).setOnClickListener(v -> { sync(); viewModel.backspace(); });
@@ -272,14 +277,21 @@ public class MainActivity extends AppCompatActivity {
 
     /** Two-arg function insert strings — pressing these triggers comma-mode. */
     private static final java.util.Set<String> TWO_ARG_INSERTS = new java.util.HashSet<>(
-            java.util.Arrays.asList("logn(", "nthrt(", "ncr(", "npr(", "mod("));
+            java.util.Arrays.asList("logn(", "nthrt(", "ncr(", "npr(", "round("));
 
     private void bindExtPage(int page) {
         currentExtPage = page;
         Boolean isRad = viewModel.getRadianMode().getValue();
+        String[] inserts = EXT_INSERT.get(page);
+        String[] labels  = EXT_LABELS.get(page);
         for (int i = 0; i < extButtons.length; i++) {
-            final String insert = EXT_INSERT[page][i];
-            final String label  = EXT_LABELS[page][i];
+            if (i >= inserts.length) {
+                extButtons[i].setVisibility(View.GONE);
+                continue;
+            }
+            extButtons[i].setVisibility(View.VISIBLE);
+            final String insert = inserts[i];
+            final String label  = labels[i];
             final android.widget.Button btn = extButtons[i];
             switch (insert) {
                 case "RAD_DEG":
@@ -300,13 +312,17 @@ public class MainActivity extends AppCompatActivity {
                     btn.setOnClickListener(v ->
                         Toast.makeText(this, "Remap — coming soon", Toast.LENGTH_SHORT).show());
                     break;
+                case ",":
+                    btn.setText(",");
+                    btn.setOnClickListener(v -> { sync(); viewModel.insert(","); });
+                    break;
                 default:
                     btn.setText(label);
                     if (TWO_ARG_INSERTS.contains(insert)) {
                         btn.setOnClickListener(v -> {
                             sync();
                             viewModel.insert(insert);
-                            activateCommaMode(btn, insert, label);
+                            activateCommaMode(btn);
                         });
                     } else {
                         btn.setOnClickListener(v -> { sync(); viewModel.insert(insert); });
@@ -317,23 +333,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Transform a button into a one-shot comma key.
-     * The first press inserts ',' and reverts the button to its original function.
-     * Pressing the function again re-enters comma mode (for the next use).
+     * Transform a button into a persistent comma key.
+     * Stays as ',' until {@link #bindExtPage} is called (i.e. the user changes pages).
      */
-    private void activateCommaMode(android.widget.Button btn, String insert, String label) {
+    private void activateCommaMode(android.widget.Button btn) {
         btn.setText(",");
-        btn.setOnClickListener(v -> {
-            sync();
-            viewModel.insert(",");
-            // Revert — re-wire so the next press of the same button enters comma mode again
-            btn.setText(label);
-            btn.setOnClickListener(v2 -> {
-                sync();
-                viewModel.insert(insert);
-                activateCommaMode(btn, insert, label);
-            });
-        });
+        btn.setOnClickListener(v -> { sync(); viewModel.insert(","); });
     }
 
     // ── STO / REC active-mode highlight ──────────────────────────────────────

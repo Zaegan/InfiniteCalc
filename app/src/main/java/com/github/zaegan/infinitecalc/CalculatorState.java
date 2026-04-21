@@ -64,12 +64,14 @@ public class CalculatorState {
         if (cursor > 0) {
             char prev = expr.charAt(cursor - 1);
             boolean prevIsValue = Character.isDigit(prev) || prev == ')'
-                    || prev == 'π' || (prev >= 'A' && prev <= 'Z')
-                    || prev == '\u03B1' || prev == '\u03B2';
+                    || prev == 'π' || prev == 'e'
+                    || (prev >= 'A' && prev <= 'Z')
+                    || prev == '\u03B1' || prev == '\u03B2'
+                    || prev == '\u2099' || prev == '\u2091' || prev == '\u2090'; // subscript constant endings
             boolean textOpensGroup = text.startsWith("sin(") || text.startsWith("cos(")
                     || text.startsWith("tan(") || text.startsWith("ln(")
                     || text.startsWith("log(") || text.startsWith("sqrt(")
-                    || text.startsWith("√(")
+                    || text.startsWith("√(") || text.startsWith("\u221B(")
                     || text.startsWith("asin(") || text.startsWith("acos(") || text.startsWith("atan(")
                     || text.startsWith("sinh(") || text.startsWith("cosh(") || text.startsWith("tanh(")
                     || text.startsWith("exp(") || text.startsWith("cbrt(") || text.startsWith("nthrt(")
@@ -77,7 +79,9 @@ public class CalculatorState {
                     || text.startsWith("floor(") || text.startsWith("ceil(")
                     || text.startsWith("log2(") || text.startsWith("logn(")
                     || text.startsWith("mod(") || text.startsWith("ncr(") || text.startsWith("npr(")
+                    || text.startsWith("10^(")
                     || text.equals("π") || text.equals("e")
+                    || text.equals("G\u2099") || text.equals("k\u2091") || text.equals("N\u2090")
                     || (text.length() == 1 && (
                             (text.charAt(0) >= 'A' && text.charAt(0) <= 'Z')
                             || text.charAt(0) == '\u03B1' || text.charAt(0) == '\u03B2'));
@@ -102,7 +106,8 @@ public class CalculatorState {
             "nthrt(", "round(", "floor(", "ceil(",
             "sqrt(", "cbrt(", "logn(", "log2(", "log(", "ln(",
             "ncr(", "npr(", "mod(",
-            "exp(", "abs(", "sin(", "cos(", "tan(", "√("
+            "exp(", "abs(", "sin(", "cos(", "tan(", "√(", "\u221B(",
+            "10^(", "G\u2099", "k\u2091", "N\u2090"
         };
         String before = expr.substring(0, cursor);
         for (String token : multiTokens) {
@@ -138,7 +143,8 @@ public class CalculatorState {
                 && (Character.isDigit(prev) || prev == ')'
                     || prev == 'π' || prev == 'e'
                     || (prev >= 'A' && prev <= 'Z')
-                    || prev == '\u03B1' || prev == '\u03B2');
+                    || prev == '\u03B1' || prev == '\u03B2'
+                    || prev == '\u2099' || prev == '\u2091' || prev == '\u2090');
 
         if (prevIsValue) {
             if (depth > 0) {
@@ -155,33 +161,50 @@ public class CalculatorState {
     }
 
     /**
-     * Smart negation: find the number at/around the cursor and toggle its sign.
+     * Smart negation.
+     *
+     * <ul>
+     *   <li>Adjacent to digits: toggle a {@code −} prefix before the digit run.</li>
+     *   <li>Before a {@code (} or letter (function/constant): insert {@code (-} so the
+     *       user can scope the negation manually.</li>
+     *   <li>Otherwise: insert a standalone {@code −} at the cursor.</li>
+     * </ul>
      */
     public void smartNegate() {
         String s = expr.toString();
         int len = s.length();
 
+        // Scan back for a digit run ending at cursor
         int numStart = cursor;
         while (numStart > 0 && (Character.isDigit(s.charAt(numStart - 1))
                 || s.charAt(numStart - 1) == '.')) {
             numStart--;
         }
 
-        if (numStart == cursor) {
-            int fwd = cursor;
-            while (fwd < len && (Character.isDigit(s.charAt(fwd)) || s.charAt(fwd) == '.')) {
-                fwd++;
+        boolean hasDigitsLeft  = numStart < cursor;
+        boolean hasDigitsRight = !hasDigitsLeft && cursor < len
+                && (Character.isDigit(s.charAt(cursor)) || s.charAt(cursor) == '.');
+        if (hasDigitsRight) numStart = cursor;
+
+        if (hasDigitsLeft || hasDigitsRight) {
+            // Toggle − before the digit run
+            if (numStart > 0 && s.charAt(numStart - 1) == '\u2212'
+                    && isUnaryAt(s, numStart - 1)) {
+                expr.deleteCharAt(numStart - 1);
+                if (cursor > numStart - 1) cursor--;
+            } else {
+                expr.insert(numStart, '\u2212');
+                cursor++;
             }
-            if (fwd == cursor) return;
-            numStart = cursor;
+            return;
         }
 
-        if (numStart > 0 && s.charAt(numStart - 1) == '\u2212'
-                && isUnaryAt(s, numStart - 1)) {
-            expr.deleteCharAt(numStart - 1);
-            if (cursor > numStart - 1) cursor--;
+        // No adjacent digits — negate a function/group or insert standalone −
+        if (cursor < len && (s.charAt(cursor) == '(' || Character.isLetter(s.charAt(cursor)))) {
+            expr.insert(cursor, "(-");
+            cursor += 2;
         } else {
-            expr.insert(numStart, '\u2212');
+            expr.insert(cursor, '\u2212');
             cursor++;
         }
     }

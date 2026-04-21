@@ -23,6 +23,41 @@ public class MxEvaluatorTest {
         return MxEvaluator.evaluatePartial(expr, null);
     }
 
+    // ── Preprocessing helpers (package-visible, tested directly) ─────────────
+
+    @Test public void casioUnaryWrapsDigits() {
+        assertEquals("(-10)^2", MxEvaluator.applyCasioUnary("-10^2"));
+    }
+
+    @Test public void casioUnaryAfterOperator() {
+        assertEquals("2+(-10)^2", MxEvaluator.applyCasioUnary("2+-10^2"));
+    }
+
+    @Test public void casioUnaryAlreadyGroupedUnchanged() {
+        assertEquals("(-10)^2", MxEvaluator.applyCasioUnary("(-10)^2"));
+    }
+
+    @Test public void casioUnaryDoesNotWrapInsideParens() {
+        // -5 inside abs( — prev is '(' so no wrapping
+        assertEquals("abs(-5)", MxEvaluator.applyCasioUnary("abs(-5)"));
+    }
+
+    @Test public void convertModuloSimple() {
+        assertEquals("mod(10,3)", MxEvaluator.convertModulo("10%3"));
+    }
+
+    @Test public void convertModuloInExpression() {
+        assertEquals("2+mod(10,3)", MxEvaluator.convertModulo("2+10%3"));
+    }
+
+    @Test public void convertModuloLeftOperandIsProduct() {
+        assertEquals("mod(2*5,3)", MxEvaluator.convertModulo("2*5%3"));
+    }
+
+    @Test public void convertModuloRightStopsAtMultiply() {
+        assertEquals("mod(10,3)*2", MxEvaluator.convertModulo("10%3*2"));
+    }
+
     // ── Basic arithmetic ─────────────────────────────────────────────────────
 
     @Test public void addition() throws Exception {
@@ -53,6 +88,14 @@ public class MxEvaluatorTest {
         assertEquals(1.0, eval("mod(10,3)"), 1e-10);
     }
 
+    @Test public void moduloInfixOperator() throws Exception {
+        assertEquals(1.0, eval("10%3"), 1e-10);
+    }
+
+    @Test public void moduloInfixInExpression() throws Exception {
+        assertEquals(3.0, eval("2+10%3"), 1e-10); // 2 + mod(10,3) = 2+1 = 3
+    }
+
     // ── Precedence and associativity ─────────────────────────────────────────
 
     @Test public void addThenMultiply() throws Exception {
@@ -72,6 +115,15 @@ public class MxEvaluatorTest {
     }
 
     // ── Unary operators ──────────────────────────────────────────────────────
+
+    @Test public void casioUnaryNegation() throws Exception {
+        // Casio mode: -10^2 → (-10)^2 = 100, not -(10^2) = -100
+        assertEquals(100.0, eval("-10^2"), 1e-10);
+    }
+
+    @Test public void casioUnaryInExpression() throws Exception {
+        assertEquals(102.0, eval("2+-10^2"), 1e-10); // 2 + (-10)^2 = 2+100
+    }
 
     @Test public void unaryMinus() throws Exception {
         assertEquals(-2.0, eval("-5+3"), 1e-10);
@@ -151,6 +203,22 @@ public class MxEvaluatorTest {
 
     @Test public void sqrtUnicode() throws Exception {
         assertEquals(3.0, eval("√(9)"), 1e-10);
+    }
+
+    @Test public void cubeRootUnicode() throws Exception {
+        assertEquals(2.0, eval("\u221B(8)"), 1e-10);
+    }
+
+    @Test public void gravitationalConstant() throws Exception {
+        assertEquals(6.674e-11, eval("G\u2099"), 1e-6);
+    }
+
+    @Test public void coulombConstant() throws Exception {
+        assertEquals(8.9875517923e9, eval("k\u2091"), 1e3);
+    }
+
+    @Test public void avogadroNumber() throws Exception {
+        assertEquals(6.02214076e23, eval("N\u2090"), 1e13);
     }
 
     @Test public void functionInExpression() throws Exception {

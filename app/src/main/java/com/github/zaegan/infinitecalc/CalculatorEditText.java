@@ -92,8 +92,10 @@ public class CalculatorEditText extends AppCompatEditText {
             }
             // Unicode operators / symbols already in evaluator form
             if (c == '\u2212' || c == '\u00D7' || c == '\u00F7') { sb.append(c); continue; }
-            if (c == '\u03C0' /* π */ || c == '\u221A' /* √   */) { sb.append(c); continue; }
+            if (c == '\u03C0' /* π */ || c == '\u221A' /* √   */ || c == '\u221B' /* ∛  */) { sb.append(c); continue; }
             if (c == '\u03B1' /* α */ || c == '\u03B2' /* β   */) { sb.append(c); continue; }
+            // Subscript letters used in physical constant tokens: ₐ ₑ ₙ
+            if (c == '\u2090' || c == '\u2091' || c == '\u2099') { sb.append(c); continue; }
             // Uppercase variables A–Z
             if (c >= 'A' && c <= 'Z') { sb.append(c); continue; }
             // Lowercase letters — valid in function names (sin, cos, ln, …) and
