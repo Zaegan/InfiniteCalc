@@ -10,6 +10,7 @@
         "androidx.recyclerview:recyclerview:1.3.2",
         "androidx.cardview:cardview:1.0.0",
         "androidx.lifecycle:lifecycle-viewmodel:2.7.0",
-        "androidx.lifecycle:lifecycle-livedata:2.7.0"
+        "androidx.lifecycle:lifecycle-livedata:2.7.0",
+        "org.mariuszgromada.math:MathParser.org-mXparser:5.2.1"
     ]
 }
