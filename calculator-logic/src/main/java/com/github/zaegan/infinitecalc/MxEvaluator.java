@@ -42,6 +42,14 @@ public class MxEvaluator {
     // Single-arg log( → log10(  (\b avoids matching logn(, log2(, log10()
     private static final Pattern PAT_LOG = Pattern.compile("\\blog\\(");
 
+    /**
+     * When true, Casio-style negation-first preprocessing is applied: bare
+     * {@code -digits} and {@code -(expr)} at unary positions are wrapped in
+     * parentheses before evaluation so negation binds tighter than {@code ^}.
+     * When false (default), standard order-of-operations applies.
+     */
+    public static boolean negationFirstMode = false;
+
     static {
         License.iConfirmNonCommercialUse("InfiniteCalc");
     }
@@ -104,8 +112,8 @@ public class MxEvaluator {
         String s = raw;
         // Unicode operators → ASCII
         s = s.replace('\u2212', '-').replace('\u00D7', '*').replace('\u00F7', '/');
-        // Casio-style unary: bare -digits at unary position → (-digits)
-        s = applyCasioUnary(s);
+        // Casio-style unary preprocessing — only in negation-first mode
+        if (negationFirstMode) s = applyCasioUnary(s);
         // % infix operator → mod(leftOp,rightOp)
         s = convertModulo(s);
         // ∛( → root(3,
@@ -149,6 +157,7 @@ public class MxEvaluator {
      *              {@code (-5^2+2)/2} → {@code ((-5)^2+2)/2} = 13.5.
      */
     static String applyCasioUnary(String s) {
+        // Pass 1: wrap -digits at unary positions → (-digits)
         StringBuilder sb = new StringBuilder(s.length());
         int i = 0;
         while (i < s.length()) {
@@ -168,14 +177,193 @@ public class MxEvaluator {
             sb.append(c);
             i++;
         }
-        return sb.toString();
+        String pass1 = sb.toString();
+
+        // Pass 2: wrap -(expr) → (-(expr)) when the group is immediately followed by ^
+        StringBuilder sb2 = new StringBuilder(pass1.length());
+        i = 0;
+        while (i < pass1.length()) {
+            char c = pass1.charAt(i);
+            if (c == '-' && isCasioUnaryPos(pass1, i)
+                    && i + 1 < pass1.length() && pass1.charAt(i + 1) == '(') {
+                int groupClose = findMatchingClose(pass1, i + 1);
+                if (groupClose > 0 && groupClose + 1 < pass1.length()
+                        && pass1.charAt(groupClose + 1) == '^') {
+                    // -(expr)^... → (-(expr))^...
+                    sb2.append("(-(");
+                    sb2.append(pass1, i + 2, groupClose); // inner content without the parens
+                    sb2.append("))");
+                    i = groupClose + 1; // advance past ')'; next char will be '^'
+                    continue;
+                }
+            }
+            sb2.append(c);
+            i++;
+        }
+        return sb2.toString();
     }
 
-    /** True when {@code pos} is a unary-minus position. */
+    /** True when {@code pos} is a unary-minus position in ASCII-form text. */
     private static boolean isCasioUnaryPos(String s, int pos) {
         if (pos == 0) return true;
         char prev = s.charAt(pos - 1);
         return prev == '+' || prev == '-' || prev == '*' || prev == '/' || prev == '^' || prev == '(';
+    }
+
+    // ── Mode-normalizing helpers ───────────────────────────────────────────────
+
+    /**
+     * Normalize an expression from standard-mode notation to negation-first notation,
+     * preserving its evaluated meaning.
+     *
+     * <p>In standard mode {@code −9^2 = -(9^2) = -81}. In negation-first mode that
+     * same string preprocesses to {@code (-9)^2 = 81} — a different result. This
+     * method rewrites such patterns so the negation-first evaluator still yields -81:
+     * <ul>
+     *   <li>{@code −DIGITS^X} → {@code −(DIGITS^X)}</li>
+     *   <li>{@code −(EXPR)^X} → {@code −((EXPR)^X)}</li>
+     * </ul>
+     * Operates on the UI representation (U+2212 minus sign).
+     */
+    static String normalizeToNegFirst(String expr) {
+        if (expr == null || expr.isEmpty()) return expr;
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        while (i < expr.length()) {
+            char c = expr.charAt(i);
+            if (c == '\u2212' && isUnaryPosUI(expr, i)) {
+                if (i + 1 < expr.length() && Character.isDigit(expr.charAt(i + 1))) {
+                    // Find end of digit run
+                    int j = i + 1;
+                    while (j < expr.length()
+                            && (Character.isDigit(expr.charAt(j)) || expr.charAt(j) == '.')) {
+                        j++;
+                    }
+                    if (j < expr.length() && expr.charAt(j) == '^') {
+                        int expEnd = findExponentChainEnd(expr, j + 1);
+                        // −DIGITS^CHAIN → −(DIGITS^CHAIN)
+                        sb.append('\u2212').append('(');
+                        sb.append(expr, i + 1, expEnd);
+                        sb.append(')');
+                        i = expEnd;
+                        continue;
+                    }
+                } else if (i + 1 < expr.length() && expr.charAt(i + 1) == '(') {
+                    int groupClose = findMatchingClose(expr, i + 1);
+                    if (groupClose > 0 && groupClose + 1 < expr.length()
+                            && expr.charAt(groupClose + 1) == '^') {
+                        int expEnd = findExponentChainEnd(expr, groupClose + 2);
+                        // −(EXPR)^CHAIN → −((EXPR)^CHAIN)
+                        sb.append('\u2212').append('(');
+                        sb.append(expr, i + 1, groupClose + 1); // (EXPR)
+                        sb.append('^');
+                        sb.append(expr, groupClose + 2, expEnd);
+                        sb.append(')');
+                        i = expEnd;
+                        continue;
+                    }
+                }
+            }
+            sb.append(c);
+            i++;
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Normalize an expression from negation-first notation to standard notation,
+     * preserving its evaluated meaning.
+     *
+     * <p>In negation-first mode {@code −9^2} preprocesses to {@code (-9)^2 = 81}.
+     * In standard mode that same string yields {@code -(9^2) = -81}. This method
+     * rewrites such patterns so the standard evaluator still yields 81:
+     * <ul>
+     *   <li>{@code −DIGITS^X...} → {@code (−DIGITS)^X...}</li>
+     *   <li>{@code −(EXPR)^X...} → {@code (−(EXPR))^X...}</li>
+     * </ul>
+     * Operates on the UI representation (U+2212 minus sign).
+     */
+    static String normalizeToStandard(String expr) {
+        if (expr == null || expr.isEmpty()) return expr;
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        while (i < expr.length()) {
+            char c = expr.charAt(i);
+            if (c == '\u2212' && isUnaryPosUI(expr, i)) {
+                if (i + 1 < expr.length() && Character.isDigit(expr.charAt(i + 1))) {
+                    int j = i + 1;
+                    while (j < expr.length()
+                            && (Character.isDigit(expr.charAt(j)) || expr.charAt(j) == '.')) {
+                        j++;
+                    }
+                    if (j < expr.length() && expr.charAt(j) == '^') {
+                        // −DIGITS^... → (−DIGITS)^...
+                        sb.append('(').append('\u2212');
+                        sb.append(expr, i + 1, j);
+                        sb.append(')');
+                        i = j; // next char is '^', appended normally
+                        continue;
+                    }
+                } else if (i + 1 < expr.length() && expr.charAt(i + 1) == '(') {
+                    int groupClose = findMatchingClose(expr, i + 1);
+                    if (groupClose > 0 && groupClose + 1 < expr.length()
+                            && expr.charAt(groupClose + 1) == '^') {
+                        // −(EXPR)^... → (−(EXPR))^...
+                        sb.append('(').append('\u2212');
+                        sb.append(expr, i + 1, groupClose + 1); // (EXPR)
+                        sb.append(')');
+                        i = groupClose + 1; // next char is '^', appended normally
+                        continue;
+                    }
+                }
+            }
+            sb.append(c);
+            i++;
+        }
+        return sb.toString();
+    }
+
+    /** Find the index of the ')' that matches the '(' at {@code openPos}. Returns -1 if none. */
+    private static int findMatchingClose(String s, int openPos) {
+        int depth = 0;
+        for (int i = openPos; i < s.length(); i++) {
+            if (s.charAt(i) == '(') depth++;
+            else if (s.charAt(i) == ')') {
+                if (--depth == 0) return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Return the index one past the end of an exponent chain starting at {@code startPos}.
+     * The chain ends at a depth-0 additive/multiplicative operator, a depth-0 ')', or
+     * end of string. {@code ^} is NOT a terminator (right-associative chains are included).
+     * Operates on UI strings (U+2212 minus sign).
+     */
+    private static int findExponentChainEnd(String s, int startPos) {
+        int i = startPos;
+        int depth = 0;
+        while (i < s.length()) {
+            char c = s.charAt(i);
+            if (c == '(') { depth++; i++; continue; }
+            if (c == ')') {
+                if (depth == 0) break;
+                depth--; i++; continue;
+            }
+            if (depth == 0 && (c == '+' || c == '\u2212'
+                    || c == '\u00D7' || c == '\u00F7' || c == '%')) break;
+            i++;
+        }
+        return i;
+    }
+
+    /** True when {@code pos} is a unary-minus position in a UI expression (U+2212 minus). */
+    private static boolean isUnaryPosUI(String s, int pos) {
+        if (pos == 0) return true;
+        char prev = s.charAt(pos - 1);
+        return prev == '+' || prev == '\u2212' || prev == '\u00D7' || prev == '\u00F7'
+                || prev == '^' || prev == '(' || prev == '%';
     }
 
     /**

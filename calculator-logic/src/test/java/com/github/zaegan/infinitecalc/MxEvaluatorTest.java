@@ -23,6 +23,16 @@ public class MxEvaluatorTest {
         return MxEvaluator.evaluatePartial(expr, null);
     }
 
+    /** Evaluate in negation-first mode, restoring the flag afterward. */
+    private double evalNegFirst(String expr) throws Exception {
+        MxEvaluator.negationFirstMode = true;
+        try {
+            return MxEvaluator.evaluate(expr, null);
+        } finally {
+            MxEvaluator.negationFirstMode = false;
+        }
+    }
+
     // ── Preprocessing helpers (package-visible, tested directly) ─────────────
 
     @Test public void casioUnaryWrapsDigits() {
@@ -41,6 +51,31 @@ public class MxEvaluatorTest {
     @Test public void casioUnaryInsideParens() {
         // (-5^2+2)/2: Casio wraps the -5 inside the group → ((-5)^2+2)/2
         assertEquals("((-5)^2+2)/2", MxEvaluator.applyCasioUnary("(-5^2+2)/2"));
+    }
+
+    // Pass 2: -(expr)^X wrapping
+
+    @Test public void casioUnaryParenGroupWrapped() {
+        // -(5+3)^2 → (-(5+3))^2
+        assertEquals("(-(5+3))^2", MxEvaluator.applyCasioUnary("-(5+3)^2"));
+    }
+
+    @Test public void casioUnaryParenGroupNoCaretUnchanged() {
+        // No ^ after group — not a negation-first pattern
+        assertEquals("-(5+3)+1", MxEvaluator.applyCasioUnary("-(5+3)+1"));
+    }
+
+    @Test public void casioUnaryParenGroupAfterOperator() {
+        assertEquals("2*(-(5+3))^2", MxEvaluator.applyCasioUnary("2*-(5+3)^2"));
+    }
+
+    @Test public void casioUnaryParenGroupNested() {
+        // Inner -3 is already wrapped by pass 1; outer group then wrapped by pass 2
+        assertEquals("(-(5+(-3)))^2", MxEvaluator.applyCasioUnary("-(5+-3)^2"));
+    }
+
+    @Test public void casioUnaryBothDigitAndParenGroup() {
+        assertEquals("(-9)^2+(-(5+3))^2", MxEvaluator.applyCasioUnary("-9^2+-(5+3)^2"));
     }
 
     @Test public void convertModuloSimple() {
@@ -118,17 +153,18 @@ public class MxEvaluatorTest {
     // ── Unary operators ──────────────────────────────────────────────────────
 
     @Test public void casioUnaryNegation() throws Exception {
-        // Casio mode: -10^2 → (-10)^2 = 100, not -(10^2) = -100
-        assertEquals(100.0, eval("-10^2"), 1e-10);
+        // Negation-first mode: -10^2 → (-10)^2 = 100
+        assertEquals(100.0, evalNegFirst("-10^2"), 1e-10);
     }
 
     @Test public void casioUnaryInExpression() throws Exception {
-        assertEquals(102.0, eval("2+-10^2"), 1e-10); // 2 + (-10)^2 = 2+100
+        // Negation-first: 2 + (-10)^2 = 2 + 100 = 102
+        assertEquals(102.0, evalNegFirst("2+-10^2"), 1e-10);
     }
 
     @Test public void casioUnaryInsideGroup() throws Exception {
-        // (-5^2+2)/2 — Casio wraps -5 even inside parens → ((-5)^2+2)/2 = 27/2 = 13.5
-        assertEquals(13.5, eval("(-5^2+2)/2"), 1e-10);
+        // Negation-first wraps -5 inside parens → ((-5)^2+2)/2 = 27/2 = 13.5
+        assertEquals(13.5, evalNegFirst("(-5^2+2)/2"), 1e-10);
     }
 
     @Test public void unaryMinus() throws Exception {
@@ -419,6 +455,147 @@ public class MxEvaluatorTest {
 
     @Test public void nprFivePermTwo() throws Exception {
         assertEquals(20.0, eval("npr(5,2)"), 1e-10);
+    }
+
+    // ── Mode-comparison: same expression, different modes ─────────────────────
+
+    @Test public void standardModeNegDigitBeforePow() throws Exception {
+        // Standard: -9^2 = -(9^2) = -81
+        assertEquals(-81.0, eval("-9^2"), 1e-10);
+    }
+
+    @Test public void negFirstModeNegDigitBeforePow() throws Exception {
+        // Negation-first: -9^2 → (-9)^2 = 81
+        assertEquals(81.0, evalNegFirst("-9^2"), 1e-10);
+    }
+
+    @Test public void standardModeNegParenBeforePow() throws Exception {
+        // Standard: -(5+3)^2 = -(64) = -64
+        assertEquals(-64.0, eval("-(5+3)^2"), 1e-10);
+    }
+
+    @Test public void negFirstModeNegParenBeforePow() throws Exception {
+        // Negation-first: -(5+3)^2 → (-(5+3))^2 = (-8)^2 = 64
+        assertEquals(64.0, evalNegFirst("-(5+3)^2"), 1e-10);
+    }
+
+    @Test public void negDigitInsideExprBothModes() throws Exception {
+        // -9^2 inside a larger expression — only value of the digit changes
+        assertEquals(-81.0 + 1.0, eval("-9^2+1"), 1e-10);      // standard: -80
+        assertEquals(81.0 + 1.0,  evalNegFirst("-9^2+1"), 1e-10); // negFirst: 82
+    }
+
+    @Test public void negParenInsideExprBothModes() throws Exception {
+        assertEquals(-64.0 + 1.0, eval("-(5+3)^2+1"), 1e-10);      // standard: -63
+        assertEquals(64.0 + 1.0,  evalNegFirst("-(5+3)^2+1"), 1e-10); // negFirst: 65
+    }
+
+    // ── normalizeToNegFirst ───────────────────────────────────────────────────
+
+    @Test public void normalizeToNegFirstDigit() {
+        assertEquals("\u2212(9^2)", MxEvaluator.normalizeToNegFirst("\u22129^2"));
+    }
+
+    @Test public void normalizeToNegFirstDigitInExpr() {
+        assertEquals("\u2212(9^2)+1", MxEvaluator.normalizeToNegFirst("\u22129^2+1"));
+    }
+
+    @Test public void normalizeToNegFirstChainedExponent() {
+        // −9^3^2 → −(9^3^2): entire right-associative chain is wrapped
+        assertEquals("\u2212(9^3^2)", MxEvaluator.normalizeToNegFirst("\u22129^3^2"));
+    }
+
+    @Test public void normalizeToNegFirstParen() {
+        assertEquals("\u2212((5+3)^2)", MxEvaluator.normalizeToNegFirst("\u2212(5+3)^2"));
+    }
+
+    @Test public void normalizeToNegFirstParenInExpr() {
+        assertEquals("1+\u2212((5+3)^2)", MxEvaluator.normalizeToNegFirst("1+\u2212(5+3)^2"));
+    }
+
+    @Test public void normalizeToNegFirstNoPatternUnchanged() {
+        // No ^ after digit/group — nothing to rewrite
+        assertEquals("\u22129+2", MxEvaluator.normalizeToNegFirst("\u22129+2"));
+    }
+
+    @Test public void normalizeToNegFirstAlreadyWrapped() {
+        // −(9^2): no ^ after the outer ')' — left as-is
+        assertEquals("\u2212(9^2)", MxEvaluator.normalizeToNegFirst("\u2212(9^2)"));
+    }
+
+    @Test public void normalizeToNegFirstMultiplePatterns() {
+        assertEquals("\u2212(9^2)\u00D7\u2212(4^3)",
+                MxEvaluator.normalizeToNegFirst("\u22129^2\u00D7\u22124^3"));
+    }
+
+    // ── normalizeToStandard ───────────────────────────────────────────────────
+
+    @Test public void normalizeToStandardDigit() {
+        assertEquals("(\u22129)^2", MxEvaluator.normalizeToStandard("\u22129^2"));
+    }
+
+    @Test public void normalizeToStandardDigitInExpr() {
+        assertEquals("(\u22129)^2+1", MxEvaluator.normalizeToStandard("\u22129^2+1"));
+    }
+
+    @Test public void normalizeToStandardParen() {
+        assertEquals("(\u2212(5+3))^2", MxEvaluator.normalizeToStandard("\u2212(5+3)^2"));
+    }
+
+    @Test public void normalizeToStandardNoPatternUnchanged() {
+        assertEquals("\u22129+2", MxEvaluator.normalizeToStandard("\u22129+2"));
+    }
+
+    @Test public void normalizeToStandardAlreadyExplicit() {
+        // (−9)^2: the − is after '(' (unary) but ')' is NOT followed by '^' at this −
+        // so it stays untouched
+        assertEquals("(\u22129)^2", MxEvaluator.normalizeToStandard("(\u22129)^2"));
+    }
+
+    @Test public void normalizeToStandardMultiplePatterns() {
+        assertEquals("(\u22129)^2\u00D7(\u22124)^3",
+                MxEvaluator.normalizeToStandard("\u22129^2\u00D7\u22124^3"));
+    }
+
+    // ── Normalization round-trips (semantic preservation) ────────────────────
+
+    @Test public void normalizeNegFirstPreservesDigitEval() throws Exception {
+        // −9^2 in standard = -81; after normalizeToNegFirst, negFirst mode also gives -81
+        String normalized = MxEvaluator.normalizeToNegFirst("\u22129^2");
+        assertEquals(-81.0, evalNegFirst(normalized), 1e-10);
+    }
+
+    @Test public void normalizeToStdPreservesDigitEval() throws Exception {
+        // −9^2 in negFirst = 81 (preprocessing: (-9)^2); after normalizeToStandard → (−9)^2
+        // standard eval of (−9)^2 = 81
+        String normalized = MxEvaluator.normalizeToStandard("\u22129^2");
+        assertEquals(81.0, eval(normalized), 1e-10);
+    }
+
+    @Test public void normalizeNegFirstPreservesParenEval() throws Exception {
+        // −(5+3)^2 in standard = -64; after normalizeToNegFirst, negFirst also gives -64
+        String normalized = MxEvaluator.normalizeToNegFirst("\u2212(5+3)^2");
+        assertEquals(-64.0, evalNegFirst(normalized), 1e-10);
+    }
+
+    @Test public void normalizeToStdPreservesParenEval() throws Exception {
+        // −(5+3)^2 in negFirst = 64; after normalizeToStandard → (−(5+3))^2, standard gives 64
+        String normalized = MxEvaluator.normalizeToStandard("\u2212(5+3)^2");
+        assertEquals(64.0, eval(normalized), 1e-10);
+    }
+
+    @Test public void normalizeNegFirstPreservesInsideExprDigit() throws Exception {
+        // 1+−9^2+1 in standard: 1 + -(9^2) + 1 = -79
+        String expr = "1+\u22129^2+1";
+        String normalized = MxEvaluator.normalizeToNegFirst(expr);
+        assertEquals(eval(expr), evalNegFirst(normalized), 1e-10);
+    }
+
+    @Test public void normalizeNegFirstPreservesInsideExprParen() throws Exception {
+        // 2+−(5+3)^2+1 in standard: 2 + -(64) + 1 = -61
+        String expr = "2+\u2212(5+3)^2+1";
+        String normalized = MxEvaluator.normalizeToNegFirst(expr);
+        assertEquals(eval(expr), evalNegFirst(normalized), 1e-10);
     }
 
     // ── Error cases ──────────────────────────────────────────────────────────

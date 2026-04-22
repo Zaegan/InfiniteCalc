@@ -40,6 +40,8 @@ public class CalculatorViewModel extends AndroidViewModel {
     private final MutableLiveData<VarMode> varMode = new MutableLiveData<>(VarMode.NONE);
     private final MutableLiveData<Boolean> radianMode = new MutableLiveData<>(false);
     private boolean useRadians = false;
+    private final MutableLiveData<Boolean> negationFirstModeData = new MutableLiveData<>(false);
+    private boolean negationFirstMode = false;
 
     // ── In-memory ordered list of raw groups (oldest first) ─────────────────
     private final List<HistoryGroup> rawGroups = new ArrayList<>();
@@ -87,11 +89,26 @@ public class CalculatorViewModel extends AndroidViewModel {
     public LiveData<Boolean> getVarPanelVisible() { return varPanelVisible; }
     public LiveData<VarMode> getVarMode() { return varMode; }
     public LiveData<Boolean> getRadianMode() { return radianMode; }
+    public LiveData<Boolean> getNegationFirstMode() { return negationFirstModeData; }
 
     public void toggleAngleMode() {
         useRadians = !useRadians;
         radianMode.setValue(useRadians);
         updatePreview(); // refresh live preview with new angle unit
+    }
+
+    public void toggleNegationFirstMode() {
+        String current = state.getExpression();
+        boolean newMode = !negationFirstMode;
+        // Normalize the current expression so it evaluates the same in the new mode
+        String normalized = newMode
+                ? MxEvaluator.normalizeToNegFirst(current)
+                : MxEvaluator.normalizeToStandard(current);
+        negationFirstMode = newMode;
+        MxEvaluator.negationFirstMode = newMode;
+        state.setExpression(normalized);
+        negationFirstModeData.setValue(negationFirstMode);
+        updateDisplay();
     }
 
     public void clearError() { errorMessage.setValue(null); }
@@ -132,7 +149,7 @@ public class CalculatorViewModel extends AndroidViewModel {
     public void smartNegate() {
         exitVarMode();
         resetIterationState();
-        state.smartNegate();
+        state.smartNegate(negationFirstMode);
         updateDisplay();
     }
 
@@ -225,12 +242,15 @@ public class CalculatorViewModel extends AndroidViewModel {
         exitVarMode();
     }
 
-    /** Load a previous expression into the input field. */
+    /** Load a previous expression into the input field, normalizing to the current mode. */
     public void restoreExpression(String expression) {
         exitVarMode();
         resetIterationState();
         currentDraftSteps.clear();
-        state.setExpression(expression);
+        String normalized = negationFirstMode
+                ? MxEvaluator.normalizeToNegFirst(expression)
+                : MxEvaluator.normalizeToStandard(expression);
+        state.setExpression(normalized);
         updateDisplay();
     }
 

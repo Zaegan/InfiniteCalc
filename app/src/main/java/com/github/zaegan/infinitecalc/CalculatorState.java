@@ -161,16 +161,35 @@ public class CalculatorState {
     }
 
     /**
-     * Smart negation.
+     * Smart negation (standard mode).
      *
      * <ul>
-     *   <li>Adjacent to digits: toggle a {@code −} prefix before the digit run.</li>
-     *   <li>Before a {@code (} or letter (function/constant): insert {@code (-} so the
-     *       user can scope the negation manually.</li>
-     *   <li>Otherwise: insert a standalone {@code −} at the cursor.</li>
+     *   <li>Adjacent to digits: insert {@code (-} before the digit run (no auto-close).</li>
+     *   <li>Before {@code (} or a letter: insert {@code (-} at cursor.</li>
+     *   <li>Otherwise: insert {@code (-} at cursor.</li>
      * </ul>
      */
     public void smartNegate() {
+        smartNegate(false);
+    }
+
+    /**
+     * Smart negation — behavior depends on mode.
+     *
+     * <p><b>Negation-first mode:</b>
+     * <ul>
+     *   <li>Adjacent to digits: toggle a {@code −} prefix before the digit run.</li>
+     *   <li>Before {@code (} or a letter: insert {@code (-} (open scope).</li>
+     *   <li>Otherwise: insert standalone {@code −}.</li>
+     * </ul>
+     *
+     * <p><b>Standard mode:</b>
+     * <ul>
+     *   <li>Adjacent to digits: insert {@code (-} before the digit run (no toggle).</li>
+     *   <li>All other positions: insert {@code (-} at the cursor.</li>
+     * </ul>
+     */
+    public void smartNegate(boolean negationFirstMode) {
         String s = expr.toString();
         int len = s.length();
 
@@ -187,25 +206,37 @@ public class CalculatorState {
         if (hasDigitsRight) numStart = cursor;
 
         if (hasDigitsLeft || hasDigitsRight) {
-            // Toggle − before the digit run
-            if (numStart > 0 && s.charAt(numStart - 1) == '\u2212'
-                    && isUnaryAt(s, numStart - 1)) {
-                expr.deleteCharAt(numStart - 1);
-                if (cursor > numStart - 1) cursor--;
+            if (negationFirstMode) {
+                // Toggle − before the digit run
+                if (numStart > 0 && s.charAt(numStart - 1) == '\u2212'
+                        && isUnaryAt(s, numStart - 1)) {
+                    expr.deleteCharAt(numStart - 1);
+                    if (cursor > numStart - 1) cursor--;
+                } else {
+                    expr.insert(numStart, '\u2212');
+                    cursor++;
+                }
             } else {
-                expr.insert(numStart, '\u2212');
-                cursor++;
+                // Standard mode: insert open scope before digit run, no auto-close
+                expr.insert(numStart, "(-");
+                cursor = numStart + 2;
             }
             return;
         }
 
-        // No adjacent digits — negate a function/group or insert standalone −
-        if (cursor < len && (s.charAt(cursor) == '(' || Character.isLetter(s.charAt(cursor)))) {
+        // No adjacent digits
+        if (negationFirstMode) {
+            if (cursor < len && (s.charAt(cursor) == '(' || Character.isLetter(s.charAt(cursor)))) {
+                expr.insert(cursor, "(-");
+                cursor += 2;
+            } else {
+                expr.insert(cursor, '\u2212');
+                cursor++;
+            }
+        } else {
+            // Standard mode: always open a scope
             expr.insert(cursor, "(-");
             cursor += 2;
-        } else {
-            expr.insert(cursor, '\u2212');
-            cursor++;
         }
     }
 

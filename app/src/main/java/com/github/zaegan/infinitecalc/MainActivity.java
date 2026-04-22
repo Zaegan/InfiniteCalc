@@ -9,6 +9,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.text.Spannable;
 import android.text.SpannableString;
+import android.text.style.ForegroundColorSpan;
 import android.text.style.RelativeSizeSpan;
 import android.text.style.SuperscriptSpan;
 import android.view.ActionMode;
@@ -31,6 +32,7 @@ public class MainActivity extends AppCompatActivity {
     private CalculatorViewModel viewModel;
     private CalculatorEditText expressionDisplay;
     private boolean extendedMode = false;
+    private boolean negationFirstMode = false;
 
     // ── Extended panel paging ─────────────────────────────────────────────────
 
@@ -56,8 +58,8 @@ public class MainActivity extends AppCompatActivity {
         new String[]{"npr(", "round(", "asin(", "acos(",       "atan(", ","},
         // Page 4 — hyperbolic & negate
         new String[]{"sinh(", "cosh(", "tanh(", "10^(",        "SETTINGS", "NEGATE"},
-        // Page 5 — remap & physical constants (4 items)
-        new String[]{"REMAP", "G\u2099", "k\u2091", "N\u2090"}
+        // Page 5 — remap, physical constants & mode toggle (5 items)
+        new String[]{"REMAP", "G\u2099", "k\u2091", "N\u2090", "OPS_MODE"}
     ));
 
     private static final java.util.ArrayList<String[]> EXT_LABELS =
@@ -67,7 +69,7 @@ public class MainActivity extends AppCompatActivity {
         new String[]{"x²", "x³", "abs", "%",                  "n!", "nCr"},
         new String[]{"nPr", "rnd", "sin⁻¹", "cos⁻¹",         "tan⁻¹", ","},
         new String[]{"sinh", "cosh", "tanh", "10^",            "Settings", "±"},
-        new String[]{"Remap", "Gₙ", "kₑ", "Nₐ"}
+        new String[]{"Remap", "Gₙ", "kₑ", "Nₐ", "NEG"}
     ));
 
     private int currentExtPage = 0;
@@ -153,6 +155,28 @@ public class MainActivity extends AppCompatActivity {
             for (int i = 0; i < extButtons.length && i < inserts.length; i++) {
                 if ("RAD_DEG".equals(inserts[i])) {
                     extButtons[i].setText(isRad ? "DEG" : "RAD");
+                    break;
+                }
+            }
+        });
+
+        viewModel.getNegationFirstMode().observe(this, isNegFirst -> {
+            negationFirstMode = (isNegFirst != null && isNegFirst);
+            // Re-render the display (superscript rule changes with mode)
+            String currentExpr = viewModel.getExpressionText().getValue();
+            if (currentExpr != null) {
+                expressionDisplay.setText(buildDisplayText(currentExpr), TextView.BufferType.SPANNABLE);
+                Integer pos = viewModel.getCursorPos().getValue();
+                if (pos != null) {
+                    int clamped = Math.max(0, Math.min(pos, currentExpr.length()));
+                    expressionDisplay.setSelection(clamped);
+                }
+            }
+            // Update the OPS_MODE button label if it is currently visible
+            String[] inserts = EXT_INSERT.get(currentExtPage);
+            for (int i = 0; i < extButtons.length && i < inserts.length; i++) {
+                if ("OPS_MODE".equals(inserts[i])) {
+                    extButtons[i].setText(negationFirstMode ? "STD" : "NEG");
                     break;
                 }
             }
@@ -312,6 +336,10 @@ public class MainActivity extends AppCompatActivity {
                     btn.setOnClickListener(v ->
                         Toast.makeText(this, "Remap — coming soon", Toast.LENGTH_SHORT).show());
                     break;
+                case "OPS_MODE":
+                    btn.setText(negationFirstMode ? "STD" : "NEG");
+                    btn.setOnClickListener(v -> viewModel.toggleNegationFirstMode());
+                    break;
                 case ",":
                     btn.setText(",");
                     btn.setOnClickListener(v -> { sync(); viewModel.insert(","); });
@@ -372,17 +400,36 @@ public class MainActivity extends AppCompatActivity {
     // ── Superscript unary minus ───────────────────────────────────────────────
 
     /**
-     * Build a SpannableString for display.  Any '−' that appears at the start
-     * of the expression, or immediately after a binary operator or '(', is
-     * rendered in superscript to clarify it is a unary negative sign.
+     * Build a SpannableString for display.
+     *
+     * <ul>
+     *   <li>Binary operators (+, −, ×, ÷, ^, %, !) are colored {@code #bdfcff}.</li>
+     *   <li>Unary '−': in negation-first mode rendered in superscript (sign indicator);
+     *       in standard mode rendered full-size white (no special span).</li>
+     * </ul>
      */
-    private static SpannableString buildDisplayText(String expr) {
+    private SpannableString buildDisplayText(String expr) {
         SpannableString ss = new SpannableString(expr);
+        int opColor = Color.parseColor("#bdfcff");
         for (int i = 0; i < expr.length(); i++) {
-            if (expr.charAt(i) == '\u2212' && isUnaryPosition(expr, i)) {
-                ss.setSpan(new SuperscriptSpan(), i, i + 1,
-                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-                ss.setSpan(new RelativeSizeSpan(0.65f), i, i + 1,
+            char c = expr.charAt(i);
+            if (c == '\u2212') {
+                if (isUnaryPosition(expr, i)) {
+                    // Unary minus: superscript only in negation-first mode
+                    if (negationFirstMode) {
+                        ss.setSpan(new SuperscriptSpan(), i, i + 1,
+                                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        ss.setSpan(new RelativeSizeSpan(0.65f), i, i + 1,
+                                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    }
+                } else {
+                    // Binary minus: operator color
+                    ss.setSpan(new ForegroundColorSpan(opColor), i, i + 1,
+                            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                }
+            } else if (c == '+' || c == '\u00D7' || c == '\u00F7'
+                    || c == '^' || c == '%' || c == '!') {
+                ss.setSpan(new ForegroundColorSpan(opColor), i, i + 1,
                         Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
         }
