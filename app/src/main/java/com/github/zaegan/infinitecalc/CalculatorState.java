@@ -100,6 +100,10 @@ public class CalculatorState {
      */
     public void backspace() {
         if (cursor == 0) return;
+        // Canonical built-in tokens deleted as a single unit.
+        // Keep in sync with the multi-char insert texts in RemapConfig.makeDefault().
+        // User-defined custom button text is intentionally NOT listed here — it
+        // deletes character by character, which is the naive/expected behaviour.
         String[] multiTokens = {
             "asin(", "acos(", "atan(",
             "sinh(", "cosh(", "tanh(",
@@ -107,7 +111,8 @@ public class CalculatorState {
             "sqrt(", "cbrt(", "logn(", "log2(", "log(", "ln(",
             "ncr(", "npr(", "mod(",
             "exp(", "abs(", "sin(", "cos(", "tan(", "√(", "\u221B(",
-            "10^(", "G\u2099", "k\u2091", "N\u2090"
+            "10^(", "^2", "^3",
+            "G\u2099", "k\u2091", "N\u2090"
         };
         String before = expr.substring(0, cursor);
         for (String token : multiTokens) {
