@@ -114,11 +114,35 @@ public class CalculatorState {
             "10^(", "^2", "^3",
             "G\u2099", "k\u2091", "N\u2090"
         };
-        String before = expr.substring(0, cursor);
+        String s      = expr.toString();
+        String before = s.substring(0, cursor);
+        String after  = s.substring(cursor);
+
         for (String token : multiTokens) {
+            // Case 1: complete token sits immediately before the cursor.
             if (before.endsWith(token)) {
                 expr.delete(cursor - token.length(), cursor);
                 cursor -= token.length();
+                return;
+            }
+            // Case 2: cursor is inside the token, or between the name and its
+            // opening '(' — try every split position within the token.
+            // Closed ')' is deliberately excluded: tokens never contain ')'.
+            for (int k = 1; k < token.length(); k++) {
+                String prefix = token.substring(0, k);
+                String suffix = token.substring(k);
+                if (!before.endsWith(prefix) || !after.startsWith(suffix)) continue;
+
+                int prefixStart = cursor - k;
+                // For letter-starting tokens require a non-letter character
+                // immediately before the match so we don't fire inside an
+                // unrelated longer name (e.g. "log" inside "colog2(").
+                if (Character.isLetter(token.charAt(0))
+                        && prefixStart > 0
+                        && Character.isLetter(s.charAt(prefixStart - 1))) continue;
+
+                expr.delete(prefixStart, cursor + suffix.length());
+                cursor = prefixStart;
                 return;
             }
         }

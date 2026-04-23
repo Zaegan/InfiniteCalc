@@ -172,6 +172,127 @@ public class CalculatorStateTest {
         assertEquals(1, s.getCursor());
     }
 
+    // ── backspace: cursor between name and '(' ────────────────────────────────
+
+    @Test public void backspaceBetweenSinAndParen() {
+        // "sin(" → place cursor between "sin" and "("
+        s.insert("sin(");
+        s.syncCursor(3); // after 'n', before '('
+        s.backspace();
+        assertEquals("", s.getExpression());
+        assertEquals(0, s.getCursor());
+    }
+
+    @Test public void backspaceBetweenAsinAndParen() {
+        s.insert("asin(");
+        s.syncCursor(4); // after "asin", before "("
+        s.backspace();
+        assertEquals("", s.getExpression());
+    }
+
+    @Test public void backspaceBetweenLog2AndParen() {
+        s.insert("log2(");
+        s.syncCursor(4); // after "log2", before "("
+        s.backspace();
+        assertEquals("", s.getExpression());
+    }
+
+    @Test public void backspaceBetweenNthrtAndParen() {
+        s.insert("nthrt(");
+        s.syncCursor(5); // after "nthrt", before "("
+        s.backspace();
+        assertEquals("", s.getExpression());
+    }
+
+    @Test public void backspaceBetweenNameAndParenLeavesPrefix() {
+        s.insert("1+sin(");
+        s.syncCursor(4); // after "1+si", i.e. between "sin" first two chars and rest
+        // cursor=4 means after '1','+','s','i' — inside "sin"
+        s.backspace();
+        assertEquals("1+", s.getExpression());
+        assertEquals(2, s.getCursor());
+    }
+
+    // ── backspace: cursor inside function name ────────────────────────────────
+
+    @Test public void backspaceInsideSinName() {
+        // "sin(" → cursor after 's' (position 1)
+        s.insert("sin(");
+        s.syncCursor(1);
+        s.backspace();
+        assertEquals("", s.getExpression());
+        assertEquals(0, s.getCursor());
+    }
+
+    @Test public void backspaceInsideSinNameMid() {
+        // "sin(" → cursor after 'si' (position 2)
+        s.insert("sin(");
+        s.syncCursor(2);
+        s.backspace();
+        assertEquals("", s.getExpression());
+    }
+
+    @Test public void backspaceInsideCoshName() {
+        // "cosh(" → cursor after "cos" (position 3)
+        s.insert("cosh(");
+        s.syncCursor(3);
+        s.backspace();
+        assertEquals("", s.getExpression());
+    }
+
+    @Test public void backspaceInsideLog2Name() {
+        // "log2(" → cursor after "log" (position 3, inside "log2(")
+        s.insert("log2(");
+        s.syncCursor(3);
+        s.backspace();
+        assertEquals("", s.getExpression());
+    }
+
+    // ── backspace: inside ^2 / ^3 ────────────────────────────────────────────
+
+    @Test public void backspaceBetweenCaretAnd2() {
+        s.insert("^2");
+        s.syncCursor(1); // after '^', before '2'
+        s.backspace();
+        assertEquals("", s.getExpression());
+        assertEquals(0, s.getCursor());
+    }
+
+    @Test public void backspaceBetweenCaretAnd3() {
+        s.insert("^3");
+        s.syncCursor(1);
+        s.backspace();
+        assertEquals("", s.getExpression());
+    }
+
+    @Test public void backspaceBetweenCaretAnd2WithPrefix() {
+        s.insert("4^2");
+        s.syncCursor(2); // after "4^", before "2"
+        s.backspace();
+        assertEquals("4", s.getExpression());
+        assertEquals(1, s.getCursor());
+    }
+
+    // ── backspace: closed ')' is still single-char ────────────────────────────
+
+    @Test public void backspaceAfterCloseParenIsSingleChar() {
+        s.insert("sin(2)");
+        s.backspace(); // deletes ')'
+        assertEquals("sin(2", s.getExpression());
+        assertEquals(5, s.getCursor());
+    }
+
+    // ── backspace: custom-style text deletes char by char ────────────────────
+
+    @Test public void backspaceCustomTextCharByChar() {
+        // "foo(" is not in the token list — deletes one char at a time
+        s.insert("foo(");
+        s.backspace();
+        assertEquals("foo", s.getExpression());
+        s.backspace();
+        assertEquals("fo", s.getExpression());
+    }
+
     // ── smartParen ───────────────────────────────────────────────────────────
 
     @Test public void smartParenOpensAtStart() {
