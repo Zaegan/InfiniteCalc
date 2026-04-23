@@ -3,6 +3,8 @@ package com.github.zaegan.infinitecalc;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Build;
@@ -17,9 +19,13 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -27,53 +33,43 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.button.MaterialButton;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 public class MainActivity extends AppCompatActivity {
+
+    private static final int REQUEST_REMAP = 1001;
 
     private CalculatorViewModel viewModel;
     private CalculatorEditText expressionDisplay;
     private boolean extendedMode = false;
     private boolean negationFirstMode = false;
 
-    // ── Extended panel paging ─────────────────────────────────────────────────
+    private RemapConfig remapConfig;
+    private SharedPreferences remapPrefs;
 
-    /**
-     * Insert text for each of the 6 remappable slots per extended page.
-     * Slots 0–3 fill row 1; slots 4–5 fill the middle of row 2 (between ‹ and ›).
-     *
-     * Sentinels (handled specially in bindExtPage):
-     *   "RAD_DEG" → toggleAngleMode(), text = current mode label
-     *   "NEGATE"  → smartNegate()
-     *   "SETTINGS"→ placeholder (future settings screen)
-     *   "REMAP"   → placeholder (future remapping screen)
-     */
-    private static final java.util.ArrayList<String[]> EXT_INSERT =
-            new java.util.ArrayList<>(java.util.Arrays.asList(
-        // Page 0 — trig & basic functions
-        new String[]{"sin(", "cos(", "tan(", "RAD_DEG",       "ln(", "log("},
-        // Page 1 — logs & roots (5 items; sqrt is on the basic panel)
-        new String[]{"log2(", "logn(", "e", "\u221B(",         "nthrt("},
-        // Page 2 — powers & combinatorics
-        new String[]{"^2", "^3", "abs(", "%",                  "!", "ncr("},
-        // Page 3 — misc, inverse trig & comma
-        new String[]{"npr(", "round(", "asin(", "acos(",       "atan(", ","},
-        // Page 4 — hyperbolic & negate
-        new String[]{"sinh(", "cosh(", "tanh(", "10^(",        "SETTINGS", "NEGATE"},
-        // Page 5 — remap, physical constants & mode toggle (5 items)
-        new String[]{"REMAP", "G\u2099", "k\u2091", "N\u2090", "OPS_MODE"}
-    ));
-
-    private static final java.util.ArrayList<String[]> EXT_LABELS =
-            new java.util.ArrayList<>(java.util.Arrays.asList(
-        new String[]{"sin", "cos", "tan", "RAD",               "ln", "log"},
-        new String[]{"log₂", "logₙ", "e", "∛",                "ⁿ√"},
-        new String[]{"x²", "x³", "abs", "%",                  "n!", "nCr"},
-        new String[]{"nPr", "rnd", "sin⁻¹", "cos⁻¹",         "tan⁻¹", ","},
-        new String[]{"sinh", "cosh", "tanh", "10^",            "Settings", "±"},
-        new String[]{"Remap", "Gₙ", "kₑ", "Nₐ", "NEG"}
-    ));
+    // Containers populated programmatically from RemapConfig
+    private LinearLayout containerExtRow1;
+    private LinearLayout containerExtRow2Mid;
+    private final LinearLayout[] containerBasic = new LinearLayout[5];
 
     private int currentExtPage = 0;
-    private android.widget.Button[] extButtons;
+
+    // Two-arg function inserts that trigger comma mode
+    private static final Set<String> TWO_ARG_INSERTS = new HashSet<>(
+            Arrays.asList("logn(", "nthrt(", "ncr(", "npr(", "round(", "mod("));
+
+    private final ActivityResultLauncher<Intent> remapLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        // Reload config whether Lock or Discard — RemapActivity always
+                        // saves on Lock; on Discard the prefs are unchanged.
+                        remapConfig = RemapConfig.load(remapPrefs);
+                        rebuildBasicRows();
+                        rebuildExtPage(currentExtPage);
+                    });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -88,22 +84,37 @@ public class MainActivity extends AppCompatActivity {
 
         viewModel = new ViewModelProvider(this).get(CalculatorViewModel.class);
 
+        // Load remap config
+        remapPrefs = getSharedPreferences("remap_prefs", MODE_PRIVATE);
+        remapConfig = RemapConfig.load(remapPrefs);
+
         expressionDisplay = findViewById(R.id.display);
         setupExpressionDisplay();
 
-        TextView previewView    = findViewById(R.id.preview);
+        TextView previewView     = findViewById(R.id.preview);
         RecyclerView historyList = findViewById(R.id.history_list);
-        View keypadContent      = findViewById(R.id.keypad_content);
-        View varGrid            = findViewById(R.id.var_grid);
-        View varExtRows         = findViewById(R.id.var_ext_rows);
-        View extendedPanel      = findViewById(R.id.extended_panel);
-        TextView btnExt         = findViewById(R.id.btn_ext);
+        View keypadContent       = findViewById(R.id.keypad_content);
+        View varGrid             = findViewById(R.id.var_grid);
+        View varExtRows          = findViewById(R.id.var_ext_rows);
+        View extendedPanel       = findViewById(R.id.extended_panel);
+        TextView btnExt          = findViewById(R.id.btn_ext);
 
-        // List is oldest-first; stackFromEnd keeps newest visible at bottom.
+        containerExtRow1    = findViewById(R.id.container_ext_row1);
+        containerExtRow2Mid = findViewById(R.id.container_ext_row2_mid);
+        containerBasic[0]   = findViewById(R.id.container_basic_0);
+        containerBasic[1]   = findViewById(R.id.container_basic_1);
+        containerBasic[2]   = findViewById(R.id.container_basic_2);
+        containerBasic[3]   = findViewById(R.id.container_basic_3);
+        containerBasic[4]   = findViewById(R.id.container_basic_4);
+
+        // Build dynamic rows from config
+        rebuildBasicRows();
+        rebuildExtPage(0);
+
+        // History list
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         historyList.setLayoutManager(layoutManager);
-
         HistoryAdapter adapter = new HistoryAdapter();
         historyList.setAdapter(adapter);
 
@@ -149,20 +160,11 @@ public class MainActivity extends AppCompatActivity {
             });
         });
 
-        viewModel.getRadianMode().observe(this, isRad -> {
-            // If the current page contains the RAD/DEG slot, update its label live
-            String[] inserts = EXT_INSERT.get(currentExtPage);
-            for (int i = 0; i < extButtons.length && i < inserts.length; i++) {
-                if ("RAD_DEG".equals(inserts[i])) {
-                    extButtons[i].setText(isRad ? "DEG" : "RAD");
-                    break;
-                }
-            }
-        });
+        viewModel.getRadianMode().observe(this, isRad ->
+                rebuildExtPage(currentExtPage));
 
         viewModel.getNegationFirstMode().observe(this, isNegFirst -> {
             negationFirstMode = (isNegFirst != null && isNegFirst);
-            // Re-render the display (superscript rule changes with mode)
             String currentExpr = viewModel.getExpressionText().getValue();
             if (currentExpr != null) {
                 expressionDisplay.setText(buildDisplayText(currentExpr), TextView.BufferType.SPANNABLE);
@@ -170,14 +172,6 @@ public class MainActivity extends AppCompatActivity {
                 if (pos != null) {
                     int clamped = Math.max(0, Math.min(pos, currentExpr.length()));
                     expressionDisplay.setSelection(clamped);
-                }
-            }
-            // Update the OPS_MODE button label if it is currently visible
-            String[] inserts = EXT_INSERT.get(currentExtPage);
-            for (int i = 0; i < extButtons.length && i < inserts.length; i++) {
-                if ("OPS_MODE".equals(inserts[i])) {
-                    extButtons[i].setText(negationFirstMode ? "STD" : "NEG");
-                    break;
                 }
             }
         });
@@ -189,7 +183,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // ── Var mode: toggle between keypad and var grid ──────────────────────
+        // ── Var mode ─────────────────────────────────────────────────────────
         viewModel.getVarMode().observe(this, mode -> {
             boolean inVarMode = mode != null && mode != CalculatorViewModel.VarMode.NONE;
             keypadContent.setVisibility(inVarMode ? View.GONE : View.VISIBLE);
@@ -217,54 +211,24 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // ── Digits ───────────────────────────────────────────────────────────
-        int[] numIds = {R.id.btn_0, R.id.btn_1, R.id.btn_2, R.id.btn_3, R.id.btn_4,
-                        R.id.btn_5, R.id.btn_6, R.id.btn_7, R.id.btn_8, R.id.btn_9};
-        for (int i = 0; i < numIds.length; i++) {
-            final String digit = String.valueOf(i);
-            findViewById(numIds[i]).setOnClickListener(v -> { sync(); viewModel.insert(digit); });
-        }
-
-        // ── Decimal ──────────────────────────────────────────────────────────
-        findViewById(R.id.btn_decimal).setOnClickListener(v -> { sync(); viewModel.insert("."); });
-
-        // ── Arithmetic operators ──────────────────────────────────────────────
-        findViewById(R.id.btn_add).setOnClickListener(v ->      { sync(); viewModel.insert("+"); });
-        findViewById(R.id.btn_subtract).setOnClickListener(v -> { sync(); viewModel.insertMinus(); });
-        findViewById(R.id.btn_multiply).setOnClickListener(v -> { sync(); viewModel.insert("\u00D7"); });
-        findViewById(R.id.btn_divide).setOnClickListener(v ->   { sync(); viewModel.insert("\u00F7"); });
-
-        // ── Basic row 1: ^ | √ | () | π ─────────────────────────────────────
-        findViewById(R.id.btn_pow).setOnClickListener(v ->   { sync(); viewModel.insert("^"); });
-        findViewById(R.id.btn_sqrt).setOnClickListener(v ->  { sync(); viewModel.insert("\u221A("); });
-        findViewById(R.id.btn_paren).setOnClickListener(v -> { sync(); viewModel.smartParen(); });
-        findViewById(R.id.btn_pi).setOnClickListener(v ->    { sync(); viewModel.insert("π"); });
-
-        // ── Extended panel: paged function buttons ────────────────────────────
-        // Slots 0-3 → row 1; slots 4-5 → row 2 middle (between permanent ‹/›)
-        extButtons = new android.widget.Button[]{
-            findViewById(R.id.btn_ext_0), findViewById(R.id.btn_ext_1),
-            findViewById(R.id.btn_ext_2), findViewById(R.id.btn_ext_3),
-            findViewById(R.id.btn_ext_4), findViewById(R.id.btn_ext_5)
-        };
-        bindExtPage(0);
-        // ‹ and › are permanent — wired once here, never overwritten by bindExtPage
+        // ── Ext page navigation ──────────────────────────────────────────────
         findViewById(R.id.btn_ext_prev).setOnClickListener(v ->
-            bindExtPage((currentExtPage - 1 + EXT_INSERT.size()) % EXT_INSERT.size()));
+                rebuildExtPage((currentExtPage - 1 + remapConfig.extPages.size())
+                        % remapConfig.extPages.size()));
         findViewById(R.id.btn_ext_next).setOnClickListener(v ->
-            bindExtPage((currentExtPage + 1) % EXT_INSERT.size()));
+                rebuildExtPage((currentExtPage + 1) % remapConfig.extPages.size()));
 
-        // ── Backspace / AC / = ────────────────────────────────────────────────
+        // ── Backspace / AC / = ───────────────────────────────────────────────
         findViewById(R.id.btn_backspace).setOnClickListener(v -> { sync(); viewModel.backspace(); });
         findViewById(R.id.btn_clear).setOnClickListener(v -> viewModel.onClear());
         findViewById(R.id.btn_equal).setOnClickListener(v -> viewModel.onEquals());
         findViewById(R.id.btn_equal_var).setOnClickListener(v -> viewModel.onEquals());
 
-        // ── STO / REC ─────────────────────────────────────────────────────────
+        // ── STO / REC ────────────────────────────────────────────────────────
         findViewById(R.id.btn_sto).setOnClickListener(v -> viewModel.enterStoMode());
         findViewById(R.id.btn_rec).setOnClickListener(v -> viewModel.enterRecMode());
 
-        // ── Variable panel: A–T (basic, 20 vars) + U–Z/α/β (EXT, 8 vars) ────
+        // ── Variable panel: A–T ──────────────────────────────────────────────
         int[] varBasicIds = {
             R.id.btn_var_a, R.id.btn_var_b, R.id.btn_var_c, R.id.btn_var_d,
             R.id.btn_var_e, R.id.btn_var_f, R.id.btn_var_g, R.id.btn_var_h,
@@ -278,8 +242,7 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < varBasicIds.length; i++) {
             final String varName = varBasicNames[i];
             findViewById(varBasicIds[i]).setOnClickListener(v -> {
-                sync();
-                viewModel.onVariableTapped(varName);
+                sync(); viewModel.onVariableTapped(varName);
             });
         }
 
@@ -291,95 +254,127 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < varExtIds.length; i++) {
             final String varName = varExtNames[i];
             findViewById(varExtIds[i]).setOnClickListener(v -> {
-                sync();
-                viewModel.onVariableTapped(varName);
+                sync(); viewModel.onVariableTapped(varName);
             });
         }
     }
 
-    // ── Extended panel paging ─────────────────────────────────────────────────
+    // ── Dynamic row building ─────────────────────────────────────────────────
 
-    /** Two-arg function insert strings — pressing these triggers comma-mode. */
-    private static final java.util.Set<String> TWO_ARG_INSERTS = new java.util.HashSet<>(
-            java.util.Arrays.asList("logn(", "nthrt(", "ncr(", "npr(", "round("));
+    private void rebuildBasicRows() {
+        List<List<ButtonDef>> rows = remapConfig.basicRows;
+        for (int r = 0; r < containerBasic.length && r < rows.size(); r++) {
+            populateRow(containerBasic[r], rows.get(r), false);
+        }
+    }
 
-    private void bindExtPage(int page) {
-        currentExtPage = page;
-        Boolean isRad = viewModel.getRadianMode().getValue();
-        String[] inserts = EXT_INSERT.get(page);
-        String[] labels  = EXT_LABELS.get(page);
-        for (int i = 0; i < extButtons.length; i++) {
-            if (i >= inserts.length) {
-                extButtons[i].setVisibility(View.GONE);
-                continue;
-            }
-            extButtons[i].setVisibility(View.VISIBLE);
-            final String insert = inserts[i];
-            final String label  = labels[i];
-            final android.widget.Button btn = extButtons[i];
-            switch (insert) {
-                case "RAD_DEG":
-                    btn.setText(isRad != null && isRad ? "DEG" : "RAD");
-                    btn.setOnClickListener(v -> viewModel.toggleAngleMode());
-                    break;
-                case "NEGATE":
-                    btn.setText(label);
-                    btn.setOnClickListener(v -> { sync(); viewModel.smartNegate(); });
-                    break;
-                case "SETTINGS":
-                    btn.setText(label);
-                    btn.setOnClickListener(v ->
-                        Toast.makeText(this, "Settings — coming soon", Toast.LENGTH_SHORT).show());
-                    break;
-                case "REMAP":
-                    btn.setText(label);
-                    btn.setOnClickListener(v ->
-                        Toast.makeText(this, "Remap — coming soon", Toast.LENGTH_SHORT).show());
-                    break;
-                case "OPS_MODE":
-                    btn.setText(negationFirstMode ? "STD" : "NEG");
-                    btn.setOnClickListener(v -> viewModel.toggleNegationFirstMode());
-                    break;
-                case ",":
-                    btn.setText(",");
-                    btn.setOnClickListener(v -> { sync(); viewModel.insert(","); });
-                    break;
-                default:
-                    btn.setText(label);
-                    if (TWO_ARG_INSERTS.contains(insert)) {
-                        btn.setOnClickListener(v -> {
-                            sync();
-                            viewModel.insert(insert);
-                            activateCommaMode(btn);
-                        });
-                    } else {
-                        btn.setOnClickListener(v -> { sync(); viewModel.insert(insert); });
-                    }
-                    break;
-            }
+    private void rebuildExtPage(int page) {
+        if (remapConfig.extPages.isEmpty()) return;
+        currentExtPage = ((page % remapConfig.extPages.size()) + remapConfig.extPages.size())
+                % remapConfig.extPages.size();
+        RemapConfig.ExtPage ep = remapConfig.extPages.get(currentExtPage);
+        populateRow(containerExtRow1, ep.row1, true);
+        populateRow(containerExtRow2Mid, ep.row2Middle, true);
+
+        // Keep ext row 2 container weight proportional to middle slot count
+        // (‹ and › each have weight=1; midWeight = middleSlots so each slot ≈ equal)
+        int midCount = ep.row2Middle.size();
+        LinearLayout.LayoutParams midParams =
+                (LinearLayout.LayoutParams) containerExtRow2Mid.getLayoutParams();
+        midParams.weight = Math.max(midCount, 0);
+        containerExtRow2Mid.setLayoutParams(midParams);
+    }
+
+    /**
+     * Remove all children from {@code container} and add one {@link Button} per
+     * {@link ButtonDef} in {@code slots}, sized according to the width rule:
+     * n=3 → first slot weight 2, rest weight 1; otherwise all weight 1.
+     */
+    private void populateRow(LinearLayout container, List<ButtonDef> slots, boolean isExt) {
+        container.removeAllViews();
+        int n = slots.size();
+        int margin = dp(2);
+        int height = isExt ? dp(52) : dp(56);
+
+        for (int i = 0; i < n; i++) {
+            ButtonDef def = slots.get(i);
+            Button btn = new Button(this);
+            btn.setAllCaps(false);
+            btn.setTextSize(13f);
+            btn.setText(displayLabelFor(def));
+            btn.setTextColor(def.textColor());
+            btn.setBackgroundTintList(ColorStateList.valueOf(def.bgColor()));
+
+            float weight = (n == 3 && i == 0) ? 2f : 1f;
+            LinearLayout.LayoutParams lp =
+                    new LinearLayout.LayoutParams(0, height, weight);
+            lp.setMargins(margin, margin, margin, margin);
+            btn.setLayoutParams(lp);
+
+            final ButtonDef captured = def;
+            btn.setOnClickListener(v -> { sync(); handleButtonAction(captured, btn); });
+
+            container.addView(btn);
         }
     }
 
     /**
-     * Transform a button into a persistent comma key.
-     * Stays as ',' until {@link #bindExtPage} is called (i.e. the user changes pages).
+     * Dynamic label: RAD_DEG shows current mode text; everything else uses labelText.
      */
-    private void activateCommaMode(android.widget.Button btn) {
+    private String displayLabelFor(ButtonDef def) {
+        if ("RAD_DEG".equals(def.insertText)) {
+            Boolean isRad = viewModel.getRadianMode().getValue();
+            return (isRad != null && isRad) ? "DEG" : "RAD";
+        }
+        return def.labelText;
+    }
+
+    // ── Button action dispatcher ─────────────────────────────────────────────
+
+    private void handleButtonAction(ButtonDef def, Button btn) {
+        switch (def.insertText) {
+            case "SMART_PAREN":
+                viewModel.smartParen();
+                break;
+            case "\u2212":
+                viewModel.insertMinus();
+                break;
+            case "NEGATE":
+                viewModel.smartNegate();
+                break;
+            case "RAD_DEG":
+                viewModel.toggleAngleMode();
+                break;
+            case "SETTINGS":
+                new SettingsDialog().show(getSupportFragmentManager(), "settings");
+                break;
+            case "REMAP":
+                remapLauncher.launch(new Intent(this, RemapActivity.class));
+                break;
+            default:
+                viewModel.insert(def.insertText);
+                if (TWO_ARG_INSERTS.contains(def.insertText)) {
+                    activateCommaMode(btn);
+                }
+                break;
+        }
+    }
+
+    /**
+     * Transform a button into a persistent comma key until the next page change.
+     */
+    private void activateCommaMode(Button btn) {
         btn.setText(",");
         btn.setOnClickListener(v -> { sync(); viewModel.insert(","); });
     }
 
-    // ── STO / REC active-mode highlight ──────────────────────────────────────
+    // ── STO/REC highlight ────────────────────────────────────────────────────
 
-    /**
-     * Visually distinguish the active STO or REC button with a bright fill and
-     * a semi-white stroke so it's obvious which mode is on and how to exit it.
-     */
     private void updateVarModeHighlight(CalculatorViewModel.VarMode mode) {
         MaterialButton btnSto = (MaterialButton) findViewById(R.id.btn_sto);
         MaterialButton btnRec = (MaterialButton) findViewById(R.id.btn_rec);
         int strokePx = Math.round(2.5f * getResources().getDisplayMetrics().density);
-        int haloColor = Color.parseColor("#ccffffff"); // semi-transparent white glow
+        int haloColor = Color.parseColor("#ccffffff");
 
         boolean stoActive = mode == CalculatorViewModel.VarMode.STO;
         boolean recActive = mode == CalculatorViewModel.VarMode.REC;
@@ -397,17 +392,8 @@ public class MainActivity extends AppCompatActivity {
         btnRec.setStrokeWidth(recActive ? strokePx : 0);
     }
 
-    // ── Superscript unary minus ───────────────────────────────────────────────
+    // ── Display text ─────────────────────────────────────────────────────────
 
-    /**
-     * Build a SpannableString for display.
-     *
-     * <ul>
-     *   <li>Binary operators (+, −, ×, ÷, ^, %, !) are colored {@code #bdfcff}.</li>
-     *   <li>Unary '−': in negation-first mode rendered in superscript (sign indicator);
-     *       in standard mode rendered full-size white (no special span).</li>
-     * </ul>
-     */
     private SpannableString buildDisplayText(String expr) {
         SpannableString ss = new SpannableString(expr);
         int opColor = Color.parseColor("#bdfcff");
@@ -415,7 +401,6 @@ public class MainActivity extends AppCompatActivity {
             char c = expr.charAt(i);
             if (c == '\u2212') {
                 if (isUnaryPosition(expr, i)) {
-                    // Unary minus: superscript only in negation-first mode
                     if (negationFirstMode) {
                         ss.setSpan(new SuperscriptSpan(), i, i + 1,
                                 Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -423,7 +408,6 @@ public class MainActivity extends AppCompatActivity {
                                 Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
                     }
                 } else {
-                    // Binary minus: operator color
                     ss.setSpan(new ForegroundColorSpan(opColor), i, i + 1,
                             Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
                 }
@@ -443,7 +427,7 @@ public class MainActivity extends AppCompatActivity {
                 || prev == '^' || prev == '%' || prev == '(';
     }
 
-    // ── EditText / CalculatorEditText setup ───────────────────────────────────
+    // ── EditText setup ───────────────────────────────────────────────────────
 
     private void setupExpressionDisplay() {
         expressionDisplay.setShowSoftInputOnFocus(false);
@@ -451,15 +435,11 @@ public class MainActivity extends AppCompatActivity {
             if (hasFocus) hideKeyboard(v);
         });
 
-        // Paste: sanitize clipboard text and route through ViewModel so it
-        // remains the single source of truth for the expression.
         expressionDisplay.setPasteListener(text -> {
             viewModel.syncCursor(expressionDisplay.getSelectionStart());
-            viewModel.insert(text); // text is already sanitized by CalculatorEditText
+            viewModel.insert(text);
         });
 
-        // Selection action mode (long-press with selection handles):
-        // allow Copy, Paste, Select All — remove Cut (deletion bypasses ViewModel).
         ActionMode.Callback selectionCallback = new ActionMode.Callback() {
             @Override public boolean onCreateActionMode(ActionMode m, Menu menu) { return true; }
             @Override public boolean onPrepareActionMode(ActionMode m, Menu menu) {
@@ -471,7 +451,6 @@ public class MainActivity extends AppCompatActivity {
         };
         expressionDisplay.setCustomSelectionActionModeCallback(selectionCallback);
 
-        // Insertion action mode (tap to place cursor): show Paste only.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             ActionMode.Callback insertionCallback = new ActionMode.Callback() {
                 @Override public boolean onCreateActionMode(ActionMode m, Menu menu) { return true; }
@@ -491,9 +470,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        // Extra safety: hide the keyboard whenever the window regains focus
-        // (e.g. returning from standby), even if setShowSoftInputOnFocus already
-        // suppresses it — some devices re-show it during the focus transition.
         if (hasFocus) hideKeyboard(expressionDisplay);
     }
 
@@ -512,5 +488,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void sync() {
         viewModel.syncCursor(expressionDisplay.getSelectionStart());
+    }
+
+    private int dp(int dp) {
+        return Math.round(dp * getResources().getDisplayMetrics().density);
     }
 }
