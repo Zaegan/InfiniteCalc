@@ -332,32 +332,45 @@ public class MainActivity extends AppCompatActivity {
     // ── Button action dispatcher ─────────────────────────────────────────────
 
     private void handleButtonAction(ButtonDef def, Button btn) {
-        switch (def.insertText) {
-            case "SMART_PAREN":
+        switch (def.getActionType()) {
+            case SMART_PAREN:
                 viewModel.smartParen();
                 break;
-            case "\u2212":
+            case MINUS:
                 viewModel.insertMinus();
                 break;
-            case "NEGATE":
+            case NEGATE:
                 viewModel.smartNegate();
                 break;
-            case "RAD_DEG":
+            case RAD_DEG:
                 viewModel.toggleAngleMode();
                 break;
-            case "SETTINGS":
+            case SETTINGS:
                 new SettingsDialog().show(getSupportFragmentManager(), "settings");
                 break;
-            case "REMAP":
+            case REMAP:
                 remapLauncher.launch(new Intent(this, RemapActivity.class));
                 break;
-            default:
-                viewModel.insert(def.insertText);
-                if (TWO_ARG_INSERTS.contains(def.insertText)) {
-                    activateCommaMode(btn);
+            case CUSTOM:
+                if (def.isSetCommand()) {
+                    executeSetCommand(def.insertText);
+                } else {
+                    viewModel.insert(def.insertText);
+                    if (TWO_ARG_INSERTS.contains(def.insertText)) {
+                        activateCommaMode(btn);
+                    }
                 }
                 break;
         }
+    }
+
+    private void executeSetCommand(String insertText) {
+        // Syntax: FROM <expr> SET _ic_<name>
+        int setIdx = insertText.lastIndexOf(" SET _ic_");
+        if (setIdx < 0) return;
+        String fromExpr  = insertText.substring("FROM ".length(), setIdx);
+        String targetVar = insertText.substring(setIdx + " SET ".length());
+        viewModel.executeCustomSet(fromExpr, targetVar);
     }
 
     /**

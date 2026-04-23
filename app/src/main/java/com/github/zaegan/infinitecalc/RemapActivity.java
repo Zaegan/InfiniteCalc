@@ -286,53 +286,182 @@ public class RemapActivity extends AppCompatActivity {
 
     private void showCreateButtonDialog() {
         int padding = dp(16);
+        int fieldMarginBottom = dp(12);
 
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(padding, padding, padding, padding);
 
-        TextView labelHint = new TextView(this);
-        labelHint.setText("Label (shown on button)");
-        labelHint.setTextColor(0xFF888888);
-        labelHint.setTextSize(12f);
-        layout.addView(labelHint);
-
-        EditText labelEdit = new EditText(this);
-        labelEdit.setInputType(InputType.TYPE_CLASS_TEXT);
-        labelEdit.setHint("e.g.  x²");
-        labelEdit.setHintTextColor(0xFF555555);
-        labelEdit.setTextColor(0xFFFFFFFF);
-        labelEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
-        LinearLayout.LayoutParams eLp = new LinearLayout.LayoutParams(
+        // ── Mode toggle ───────────────────────────────────────────────────────
+        LinearLayout modeRow = new LinearLayout(this);
+        modeRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams modeRowLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        eLp.bottomMargin = dp(12);
-        labelEdit.setLayoutParams(eLp);
-        layout.addView(labelEdit);
+        modeRowLp.bottomMargin = fieldMarginBottom;
+        modeRow.setLayoutParams(modeRowLp);
 
-        TextView insertHint = new TextView(this);
-        insertHint.setText("Insert text (typed into expression)");
-        insertHint.setTextColor(0xFF888888);
-        insertHint.setTextSize(12f);
-        layout.addView(insertHint);
+        Button btnModeInsert = new Button(this);
+        btnModeInsert.setAllCaps(false);
+        btnModeInsert.setText("Insert Text");
+        Button btnModeSet = new Button(this);
+        btnModeSet.setAllCaps(false);
+        btnModeSet.setText("Set Variable");
 
-        EditText insertEdit = new EditText(this);
-        insertEdit.setInputType(InputType.TYPE_CLASS_TEXT);
-        insertEdit.setHint("e.g.  ^2");
-        insertEdit.setHintTextColor(0xFF555555);
-        insertEdit.setTextColor(0xFFFFFFFF);
-        insertEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
-        layout.addView(insertEdit);
+        LinearLayout.LayoutParams modeBtnLp = new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        btnModeInsert.setLayoutParams(modeBtnLp);
+        btnModeSet.setLayoutParams(new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        modeRow.addView(btnModeInsert);
+        modeRow.addView(btnModeSet);
+        layout.addView(modeRow);
+
+        // ── Insert section ────────────────────────────────────────────────────
+        LinearLayout insertSection = new LinearLayout(this);
+        insertSection.setOrientation(LinearLayout.VERTICAL);
+
+        TextView insertLabelHint = new TextView(this);
+        insertLabelHint.setText("Label (shown on button)");
+        insertLabelHint.setTextColor(0xFF888888);
+        insertLabelHint.setTextSize(12f);
+        insertSection.addView(insertLabelHint);
+
+        EditText insertLabelEdit = new EditText(this);
+        insertLabelEdit.setInputType(InputType.TYPE_CLASS_TEXT);
+        insertLabelEdit.setHint("e.g.  x²");
+        insertLabelEdit.setHintTextColor(0xFF555555);
+        insertLabelEdit.setTextColor(0xFFFFFFFF);
+        insertLabelEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        LinearLayout.LayoutParams iLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        iLp.bottomMargin = fieldMarginBottom;
+        insertLabelEdit.setLayoutParams(iLp);
+        insertSection.addView(insertLabelEdit);
+
+        TextView insertTextHint = new TextView(this);
+        insertTextHint.setText("Insert text (typed into expression)");
+        insertTextHint.setTextColor(0xFF888888);
+        insertTextHint.setTextSize(12f);
+        insertSection.addView(insertTextHint);
+
+        EditText insertTextEdit = new EditText(this);
+        insertTextEdit.setInputType(InputType.TYPE_CLASS_TEXT);
+        insertTextEdit.setHint("e.g.  ^2");
+        insertTextEdit.setHintTextColor(0xFF555555);
+        insertTextEdit.setTextColor(0xFFFFFFFF);
+        insertTextEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        insertSection.addView(insertTextEdit);
+
+        layout.addView(insertSection);
+
+        // ── Set Variable section ──────────────────────────────────────────────
+        LinearLayout setSection = new LinearLayout(this);
+        setSection.setOrientation(LinearLayout.VERTICAL);
+        setSection.setVisibility(View.GONE);
+
+        TextView setNameHint = new TextView(this);
+        setNameHint.setText("Variable name (stored as _ic_<name>)");
+        setNameHint.setTextColor(0xFF888888);
+        setNameHint.setTextSize(12f);
+        setSection.addView(setNameHint);
+
+        EditText setNameEdit = new EditText(this);
+        setNameEdit.setInputType(InputType.TYPE_CLASS_TEXT);
+        setNameEdit.setHint("e.g.  result");
+        setNameEdit.setHintTextColor(0xFF555555);
+        setNameEdit.setTextColor(0xFFFFFFFF);
+        setNameEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        LinearLayout.LayoutParams snLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        snLp.bottomMargin = fieldMarginBottom;
+        setNameEdit.setLayoutParams(snLp);
+        setSection.addView(setNameEdit);
+
+        TextView setFromHint = new TextView(this);
+        setFromHint.setText("FROM expression (use _ic_current for display value)");
+        setFromHint.setTextColor(0xFF888888);
+        setFromHint.setTextSize(12f);
+        setSection.addView(setFromHint);
+
+        EditText setFromEdit = new EditText(this);
+        setFromEdit.setInputType(InputType.TYPE_CLASS_TEXT);
+        setFromEdit.setText("_ic_current");
+        setFromEdit.setTextColor(0xFFFFFFFF);
+        setFromEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        LinearLayout.LayoutParams sfLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        sfLp.bottomMargin = fieldMarginBottom;
+        setFromEdit.setLayoutParams(sfLp);
+        setSection.addView(setFromEdit);
+
+        TextView setLabelHint = new TextView(this);
+        setLabelHint.setText("Label (shown on button, optional)");
+        setLabelHint.setTextColor(0xFF888888);
+        setLabelHint.setTextSize(12f);
+        setSection.addView(setLabelHint);
+
+        EditText setLabelEdit = new EditText(this);
+        setLabelEdit.setInputType(InputType.TYPE_CLASS_TEXT);
+        setLabelEdit.setHint("e.g.  →result");
+        setLabelEdit.setHintTextColor(0xFF555555);
+        setLabelEdit.setTextColor(0xFFFFFFFF);
+        setLabelEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        setSection.addView(setLabelEdit);
+
+        layout.addView(setSection);
+
+        // ── Mode toggle wiring ────────────────────────────────────────────────
+        final boolean[] setMode = {false};
+
+        btnModeInsert.setBackgroundTintList(ColorStateList.valueOf(0xFF1A3A1A));
+        btnModeInsert.setTextColor(0xFFAAFFAA);
+        btnModeSet.setBackgroundTintList(ColorStateList.valueOf(0xFF1A1A1A));
+        btnModeSet.setTextColor(0xFF666666);
+
+        btnModeInsert.setOnClickListener(v -> {
+            setMode[0] = false;
+            insertSection.setVisibility(View.VISIBLE);
+            setSection.setVisibility(View.GONE);
+            btnModeInsert.setBackgroundTintList(ColorStateList.valueOf(0xFF1A3A1A));
+            btnModeInsert.setTextColor(0xFFAAFFAA);
+            btnModeSet.setBackgroundTintList(ColorStateList.valueOf(0xFF1A1A1A));
+            btnModeSet.setTextColor(0xFF666666);
+        });
+        btnModeSet.setOnClickListener(v -> {
+            setMode[0] = true;
+            insertSection.setVisibility(View.GONE);
+            setSection.setVisibility(View.VISIBLE);
+            btnModeSet.setBackgroundTintList(ColorStateList.valueOf(0xFF2A1A00));
+            btnModeSet.setTextColor(0xFFFFAA40);
+            btnModeInsert.setBackgroundTintList(ColorStateList.valueOf(0xFF1A1A1A));
+            btnModeInsert.setTextColor(0xFF666666);
+        });
 
         new AlertDialog.Builder(this)
                 .setTitle("New Custom Button")
                 .setView(layout)
                 .setPositiveButton("Create", (dialog, which) -> {
-                    String label  = labelEdit.getText().toString().trim();
-                    String insert = CalculatorEditText.sanitize(
-                            insertEdit.getText().toString());
-                    if (label.isEmpty()) label = insert;
-                    if (insert.isEmpty()) return;
-                    customPalette.add(new ButtonDef(insert, label));
+                    if (setMode[0]) {
+                        // Set Variable mode
+                        String rawName = setNameEdit.getText().toString().trim()
+                                .replaceAll("[^A-Za-z0-9_]", "");
+                        if (rawName.isEmpty()) return;
+                        String targetVar = "_ic_" + rawName;
+                        String fromExpr = setFromEdit.getText().toString().trim();
+                        if (fromExpr.isEmpty()) fromExpr = "_ic_current";
+                        String label = setLabelEdit.getText().toString().trim();
+                        if (label.isEmpty()) label = "\u2192" + rawName;
+                        String insertText = "FROM " + fromExpr + " SET " + targetVar;
+                        customPalette.add(new ButtonDef(insertText, label));
+                    } else {
+                        // Insert Text mode
+                        String label  = insertLabelEdit.getText().toString().trim();
+                        String insert = CalculatorEditText.sanitize(
+                                insertTextEdit.getText().toString());
+                        if (label.isEmpty()) label = insert;
+                        if (insert.isEmpty()) return;
+                        customPalette.add(new ButtonDef(insert, label));
+                    }
                     buildUI();
                 })
                 .setNegativeButton("Cancel", null)

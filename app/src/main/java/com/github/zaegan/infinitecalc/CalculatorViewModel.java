@@ -65,7 +65,8 @@ public class CalculatorViewModel extends AndroidViewModel {
     // ── Persistence ─────────────────────────────────────────────────────────
     private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
 
-    private static final String PREF_NAME = "calculator_vars";
+    private static final String PREF_NAME        = "calculator_vars";
+    private static final String CUSTOM_PREF_NAME = "ic_custom_vars";
     private static final String[] VAR_NAMES = {
         "A", "B", "C", "D", "E", "F", "G", "H",
         "I", "J", "K", "L", "M", "N", "O", "P",
@@ -73,10 +74,12 @@ public class CalculatorViewModel extends AndroidViewModel {
         "Y", "Z", "\u03B1", "\u03B2"
     };
     private final SharedPreferences prefs;
+    private final SharedPreferences customVarPrefs;
 
     public CalculatorViewModel(Application application) {
         super(application);
-        prefs = application.getSharedPreferences(PREF_NAME, 0);
+        prefs          = application.getSharedPreferences(PREF_NAME, 0);
+        customVarPrefs = application.getSharedPreferences(CUSTOM_PREF_NAME, 0);
         loadHistoryFromDb();
     }
 
@@ -417,7 +420,43 @@ public class CalculatorViewModel extends AndroidViewModel {
         for (String name : VAR_NAMES) {
             vars.put(name, (double) prefs.getFloat(name, 0f));
         }
+        // Custom variables stored as _ic_<name> — absent keys are not added so the
+        // evaluator throws "unknown variable" rather than silently defaulting to zero.
+        for (Map.Entry<String, ?> entry : customVarPrefs.getAll().entrySet()) {
+            if (entry.getValue() instanceof Float) {
+                vars.put(entry.getKey(), ((Float) entry.getValue()).doubleValue());
+            }
+        }
         return vars;
+    }
+
+    /**
+     * Evaluate {@code fromExpr} and store the result under {@code targetVar} (e.g.
+     * {@code "_ic_myvar"}).  The special token {@code _ic_current} in {@code fromExpr}
+     * resolves to the current expression's evaluated value; if the current expression
+     * cannot be evaluated {@code _ic_current} is left undefined and the evaluator will
+     * surface an appropriate error.
+     */
+    public void executeCustomSet(String fromExpr, String targetVar) {
+        try {
+            Map<String, Double> vars = loadVariables();
+            // Provide _ic_current = result of the current expression (best-effort)
+            String currentExpr = state.getExpression().trim();
+            if (!currentExpr.isEmpty()) {
+                try {
+                    double cur = MxEvaluator.evaluatePartial(currentExpr, vars, useRadians);
+                    vars.put("_ic_current", cur);
+                } catch (Exception ignored) {
+                    // _ic_current remains absent; evaluator will error if fromExpr needs it
+                }
+            }
+            double result = MxEvaluator.evaluate(fromExpr, vars, useRadians);
+            customVarPrefs.edit().putFloat(targetVar, (float) result).apply();
+            String shortName = targetVar.startsWith("_ic_") ? targetVar.substring(4) : targetVar;
+            errorMessage.setValue(shortName + " = " + CalculatorState.formatResult(result));
+        } catch (Exception e) {
+            errorMessage.setValue(e.getMessage() != null ? e.getMessage() : "Error");
+        }
     }
 
     // ── Persistence ─────────────────────────────────────────────────────────

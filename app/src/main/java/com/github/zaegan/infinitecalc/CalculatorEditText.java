@@ -96,6 +96,8 @@ public class CalculatorEditText extends AppCompatEditText {
             if (c == '\u03B1' /* α */ || c == '\u03B2' /* β   */) { sb.append(c); continue; }
             // Subscript letters used in physical constant tokens: ₐ ₑ ₙ
             if (c == '\u2090' || c == '\u2091' || c == '\u2099') { sb.append(c); continue; }
+            // Underscore: part of _ic_ custom variable names
+            if (c == '_') { sb.append(c); continue; }
             // Uppercase variables A–Z
             if (c >= 'A' && c <= 'Z') { sb.append(c); continue; }
             // Lowercase letters — valid in function names (sin, cos, ln, …) and
