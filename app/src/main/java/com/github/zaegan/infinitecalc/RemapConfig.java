@@ -29,6 +29,13 @@ public class RemapConfig {
     /** Exactly 5 entries; row count is immutable, slot contents are remappable. */
     public final List<List<ButtonDef>> basicRows;
 
+    /**
+     * User-defined custom buttons.  These live in the remap palette and can be
+     * copied into any slot.  Entries here are never inserted into slots directly
+     * — placed slots hold their own copy of the ButtonDef.
+     */
+    public final List<ButtonDef> customPalette;
+
     public static class ExtPage {
         public final List<ButtonDef> row1;
         /** Middle slots of ext row 2 (without ‹ and ›). */
@@ -42,9 +49,11 @@ public class RemapConfig {
 
     public final List<ExtPage> extPages;
 
-    public RemapConfig(List<List<ButtonDef>> basicRows, List<ExtPage> extPages) {
-        this.basicRows = basicRows;
-        this.extPages  = extPages;
+    public RemapConfig(List<List<ButtonDef>> basicRows, List<ExtPage> extPages,
+                       List<ButtonDef> customPalette) {
+        this.basicRows     = basicRows;
+        this.extPages      = extPages;
+        this.customPalette = customPalette;
     }
 
     // ── Default layout ────────────────────────────────────────────────────────
@@ -113,7 +122,7 @@ public class RemapConfig {
                 def("G\u2099","Gₙ"), def("k\u2091","kₑ"), def("N\u2090","Nₐ")),
             row()));   // empty row2Middle
 
-        return new RemapConfig(basic, ext);
+        return new RemapConfig(basic, ext, new ArrayList<>());
     }
 
     // ── Persistence ───────────────────────────────────────────────────────────
@@ -152,6 +161,8 @@ public class RemapConfig {
         }
         root.put("extPages", eArr);
 
+        root.put("customPalette", rowToJson(customPalette));
+
         return root;
     }
 
@@ -168,7 +179,11 @@ public class RemapConfig {
                 rowFromJson(p.getJSONArray("row1")),
                 rowFromJson(p.getJSONArray("row2Middle"))));
         }
-        return new RemapConfig(basic, ext);
+        List<ButtonDef> palette = new ArrayList<>();
+        if (root.has("customPalette")) {
+            palette = rowFromJson(root.getJSONArray("customPalette"));
+        }
+        return new RemapConfig(basic, ext, palette);
     }
 
     private static JSONArray rowToJson(List<ButtonDef> row) throws JSONException {

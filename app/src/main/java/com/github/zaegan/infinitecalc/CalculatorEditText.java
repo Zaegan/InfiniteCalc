@@ -104,6 +104,11 @@ public class CalculatorEditText extends AppCompatEditText {
             if (c >= 'a' && c <= 'z') { sb.append(c); continue; }
             // Everything else is dropped.
         }
-        return sb.toString();
+        // Normalise function names that have a dedicated unicode symbol.
+        // Done after the loop so multi-character replacements are straightforward.
+        String result = sb.toString();
+        result = result.replace("sqrt(", "\u221A(");   // √(
+        result = result.replace("cbrt(", "\u221B(");   // ∛(
+        return result;
     }
 }

@@ -6,14 +6,17 @@ import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.DragEvent;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.ArrayList;
@@ -21,13 +24,18 @@ import java.util.List;
 
 public class RemapActivity extends AppCompatActivity {
 
-    // ── Drag source encoding: "basic:rowIdx:slotIdx" or "ext:pageIdx:row:slotIdx"
-    private static final String DRAG_BASIC = "basic";
-    private static final String DRAG_EXT   = "ext";
+    // ── Drag source encoding:
+    //   "basic:rowIdx:slotIdx"       — basic row slot (move)
+    //   "ext:pageIdx:row:slotIdx"    — ext page slot  (move)
+    //   "palette:idx"                — custom palette  (copy, original stays)
+    private static final String DRAG_BASIC   = "basic";
+    private static final String DRAG_EXT     = "ext";
+    private static final String DRAG_PALETTE = "palette";
 
     // ── Mutable working copy ─────────────────────────────────────────────────
     private ArrayList<ArrayList<ButtonDef>> basicRows;
     private ArrayList<ExtPageWork> extPages;
+    private ArrayList<ButtonDef> customPalette;
 
     private static class ExtPageWork {
         ArrayList<ButtonDef> row1;
@@ -65,6 +73,7 @@ public class RemapActivity extends AppCompatActivity {
         for (List<ButtonDef> row : cfg.basicRows) basicRows.add(new ArrayList<>(row));
         extPages = new ArrayList<>();
         for (RemapConfig.ExtPage p : cfg.extPages) extPages.add(new ExtPageWork(p.row1, p.row2Middle));
+        customPalette = new ArrayList<>(cfg.customPalette);
 
         buildUI();
 
@@ -107,6 +116,10 @@ public class RemapActivity extends AppCompatActivity {
         addSectionLabel("Enter");
         addPermanentRow(new String[]{"="},
                 new int[]{0xFF80FF90}, new int[]{0xFF0A3A0A});
+
+        // Custom palette
+        addSectionLabel("Custom Buttons");
+        addCustomPalette();
     }
 
     // ── Section helpers ───────────────────────────────────────────────────────
@@ -162,6 +175,168 @@ public class RemapActivity extends AppCompatActivity {
         row2.addView(next);
 
         rowsContainer.addView(row2);
+    }
+
+    // ── Custom palette ────────────────────────────────────────────────────────
+
+    /**
+     * Renders the custom palette: a wrapping row of existing custom buttons
+     * (each draggable as a copy-source) plus a "＋ New" button.
+     *
+     * Palette drags are COPY operations — the palette entry is never removed.
+     * Deleting a palette entry uses the small "×" button on each item.
+     */
+    private void addCustomPalette() {
+        // Palette buttons are laid out in a wrapping horizontal row.
+        // Use a LinearLayout that wraps content; for simplicity we allow one
+        // long horizontal scroll row per custom button + the Create button.
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        row.setLayoutParams(rowLp);
+
+        for (int i = 0; i < customPalette.size(); i++) {
+            final int idx = i;
+            ButtonDef def = customPalette.get(i);
+            row.addView(makePaletteItem(def, idx));
+        }
+
+        // "＋ New" button
+        Button addBtn = new Button(this);
+        addBtn.setAllCaps(false);
+        addBtn.setText("＋ New");
+        addBtn.setTextColor(0xFFAAAAFF);
+        addBtn.setBackgroundTintList(ColorStateList.valueOf(0xFF1A1A3A));
+        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(52));
+        addLp.setMargins(dp(2), dp(2), dp(2), dp(2));
+        addBtn.setLayoutParams(addLp);
+        addBtn.setOnClickListener(v -> showCreateButtonDialog());
+        row.addView(addBtn);
+
+        rowsContainer.addView(row);
+
+        // Hint if palette is empty
+        if (customPalette.isEmpty()) {
+            TextView hint = new TextView(this);
+            hint.setText("Tap ＋ New to create a custom button, then drag it into any slot above.");
+            hint.setTextColor(0xFF555555);
+            hint.setTextSize(11f);
+            hint.setPadding(dp(10), dp(2), dp(10), dp(8));
+            rowsContainer.addView(hint);
+        }
+    }
+
+    /**
+     * A palette item: the draggable copy-source button with a small × delete badge.
+     */
+    private LinearLayout makePaletteItem(ButtonDef def, int paletteIdx) {
+        LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams wLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        wLp.setMargins(dp(2), dp(2), dp(2), dp(2));
+        wrapper.setLayoutParams(wLp);
+
+        Button btn = new Button(this);
+        btn.setAllCaps(false);
+        btn.setTextSize(13f);
+        btn.setText(def.labelText);
+        btn.setTextColor(def.textColor());
+        btn.setBackgroundTintList(ColorStateList.valueOf(def.bgColor()));
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(52));
+        btn.setLayoutParams(btnLp);
+
+        String palTag = DRAG_PALETTE + ":" + paletteIdx;
+        btn.setOnLongClickListener(v -> {
+            ClipData cd = ClipData.newPlainText("drag", palTag);
+            View.DragShadowBuilder shadow = new View.DragShadowBuilder(v);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                v.startDragAndDrop(cd, shadow, palTag, 0);
+            } else {
+                //noinspection deprecation
+                v.startDrag(cd, shadow, palTag, 0);
+            }
+            return true;
+        });
+
+        // Delete button
+        Button del = new Button(this);
+        del.setAllCaps(false);
+        del.setText("×");
+        del.setTextColor(0xFFFF6666);
+        del.setTextSize(11f);
+        del.setBackgroundTintList(ColorStateList.valueOf(0xFF2A0000));
+        LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(22));
+        del.setLayoutParams(delLp);
+        del.setPadding(0, 0, 0, 0);
+        del.setOnClickListener(v -> {
+            customPalette.remove(paletteIdx);
+            buildUI();
+        });
+
+        wrapper.addView(btn);
+        wrapper.addView(del);
+        return wrapper;
+    }
+
+    private void showCreateButtonDialog() {
+        int padding = dp(16);
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(padding, padding, padding, padding);
+
+        TextView labelHint = new TextView(this);
+        labelHint.setText("Label (shown on button)");
+        labelHint.setTextColor(0xFF888888);
+        labelHint.setTextSize(12f);
+        layout.addView(labelHint);
+
+        EditText labelEdit = new EditText(this);
+        labelEdit.setInputType(InputType.TYPE_CLASS_TEXT);
+        labelEdit.setHint("e.g.  x²");
+        labelEdit.setHintTextColor(0xFF555555);
+        labelEdit.setTextColor(0xFFFFFFFF);
+        labelEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        LinearLayout.LayoutParams eLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        eLp.bottomMargin = dp(12);
+        labelEdit.setLayoutParams(eLp);
+        layout.addView(labelEdit);
+
+        TextView insertHint = new TextView(this);
+        insertHint.setText("Insert text (typed into expression)");
+        insertHint.setTextColor(0xFF888888);
+        insertHint.setTextSize(12f);
+        layout.addView(insertHint);
+
+        EditText insertEdit = new EditText(this);
+        insertEdit.setInputType(InputType.TYPE_CLASS_TEXT);
+        insertEdit.setHint("e.g.  ^2");
+        insertEdit.setHintTextColor(0xFF555555);
+        insertEdit.setTextColor(0xFFFFFFFF);
+        insertEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        layout.addView(insertEdit);
+
+        new AlertDialog.Builder(this)
+                .setTitle("New Custom Button")
+                .setView(layout)
+                .setPositiveButton("Create", (dialog, which) -> {
+                    String label  = labelEdit.getText().toString().trim();
+                    String insert = CalculatorEditText.sanitize(
+                            insertEdit.getText().toString());
+                    if (label.isEmpty()) label = insert;
+                    if (insert.isEmpty()) return;
+                    customPalette.add(new ButtonDef(insert, label));
+                    buildUI();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void addRemapRow(String section, int rowIdx) {
@@ -275,13 +450,15 @@ public class RemapActivity extends AppCompatActivity {
 
     /**
      * Parse source tag into int[] {type, pageOrRow, rowInPage, slotIdx}.
-     * type: 0=basic, 1=ext
+     * type: 0=basic, 1=ext, 2=palette (copy — never removed from source)
      */
     private int[] resolveSource(String tag) {
         String[] parts = tag.split(":");
         try {
             if (DRAG_BASIC.equals(parts[0])) {
                 return new int[]{0, Integer.parseInt(parts[1]), -1, Integer.parseInt(parts[2])};
+            } else if (DRAG_PALETTE.equals(parts[0])) {
+                return new int[]{2, Integer.parseInt(parts[1]), -1, -1};
             } else {
                 return new int[]{1, Integer.parseInt(parts[1]),
                         Integer.parseInt(parts[2]), Integer.parseInt(parts[3])};
@@ -289,11 +466,17 @@ public class RemapActivity extends AppCompatActivity {
         } catch (Exception e) { return null; }
     }
 
-    /** Remove the button at the source location and return it. */
+    /**
+     * Remove the button at the source location and return it.
+     * For palette sources (type=2) the entry is NOT removed — it is copied.
+     */
     private ButtonDef removeFromSource(int[] src) {
         int type = src[0], idx = src[1], row = src[2], slot = src[3];
+        if (type == 2) {
+            // Palette: copy only, never remove
+            return idx < customPalette.size() ? customPalette.get(idx) : null;
+        }
         if (type == 0) {
-            // basic
             if (idx < basicRows.size() && slot < basicRows.get(idx).size()) {
                 return basicRows.get(idx).remove(slot);
             }
@@ -364,16 +547,24 @@ public class RemapActivity extends AppCompatActivity {
 
     /** Swap the button at srcTag with the button at (destRowKey, destSlot). */
     private void performSwap(String srcTag, String destRowKey, int destSlot) {
-        int[] src  = resolveSource(srcTag);
+        int[] src = resolveSource(srcTag);
+        if (src == null) return;
+
+        // Palette drag onto a button: insert the copy before the target button.
+        if (src[0] == 2) {
+            performInsert(srcTag, destRowKey, destSlot);
+            return;
+        }
+
         int[] dest = resolveSource(destRowKey + ":" + destSlot);
-        if (src == null || dest == null) return;
+        if (dest == null) return;
 
         List<ButtonDef> srcList  = getSlotList(src);
         List<ButtonDef> destList = getSlotList(dest);
         if (srcList == null || destList == null) return;
 
-        int srcSlot  = src[3];
-        int dstSlot  = dest[3];
+        int srcSlot = src[3];
+        int dstSlot = dest[3];
         if (srcSlot >= srcList.size() || dstSlot >= destList.size()) return;
 
         ButtonDef tmp = srcList.get(srcSlot);
@@ -487,6 +678,7 @@ public class RemapActivity extends AppCompatActivity {
     }
 
     private boolean isSameRow(int[] src, String destRowKey) {
+        if (src[0] == 2) return false; // palette is never "same row" as a layout row
         String[] parts = destRowKey.split(":");
         try {
             if (src[0] == 0 && DRAG_BASIC.equals(parts[0])) {
@@ -523,7 +715,7 @@ public class RemapActivity extends AppCompatActivity {
         ArrayList<RemapConfig.ExtPage> ext = new ArrayList<>();
         for (ExtPageWork p : extPages) ext.add(new RemapConfig.ExtPage(p.row1, p.row2Middle));
 
-        RemapConfig cfg = new RemapConfig(basic, ext);
+        RemapConfig cfg = new RemapConfig(basic, ext, new ArrayList<>(customPalette));
         cfg.save(getSharedPreferences("remap_prefs", MODE_PRIVATE));
     }
 
