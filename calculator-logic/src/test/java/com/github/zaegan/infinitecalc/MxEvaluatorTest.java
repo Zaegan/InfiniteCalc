@@ -78,6 +78,25 @@ public class MxEvaluatorTest {
         assertEquals("(-9)^2+(-(5+3))^2", MxEvaluator.applyCasioUnary("-9^2+-(5+3)^2"));
     }
 
+    // Pass 3: -funcname(expr)^X wrapping
+
+    @Test public void casioUnaryFuncWrapped() {
+        assertEquals("(-sin(x))^2", MxEvaluator.applyCasioUnary("-sin(x)^2"));
+    }
+
+    @Test public void casioUnaryFuncNoCaretUnchanged() {
+        assertEquals("-sin(x)+1", MxEvaluator.applyCasioUnary("-sin(x)+1"));
+    }
+
+    @Test public void casioUnaryFuncAfterOperator() {
+        assertEquals("2*(-sin(x))^2", MxEvaluator.applyCasioUnary("2*-sin(x)^2"));
+    }
+
+    @Test public void casioUnaryAllThreePatterns() {
+        assertEquals("(-9)^2+(-(5+3))^2+(-sin(x))^2",
+                MxEvaluator.applyCasioUnary("-9^2+-(5+3)^2+-sin(x)^2"));
+    }
+
     @Test public void convertModuloSimple() {
         assertEquals("mod(10,3)", MxEvaluator.convertModulo("10%3"));
     }
@@ -490,6 +509,16 @@ public class MxEvaluatorTest {
         assertEquals(64.0 + 1.0,  evalNegFirst("-(5+3)^2+1"), 1e-10); // negFirst: 65
     }
 
+    @Test public void standardModeFuncNegBeforePow() throws Exception {
+        // Standard: -sin(π/2)^2 = -(sin(π/2)^2) = -(1) = -1
+        assertEquals(-1.0, eval("-sin(pi/2)^2"), 1e-10);
+    }
+
+    @Test public void negFirstModeFuncNegBeforePow() throws Exception {
+        // Negation-first: -sin(π/2)^2 → (-sin(π/2))^2 = (-1)^2 = 1
+        assertEquals(1.0, evalNegFirst("-sin(pi/2)^2"), 1e-10);
+    }
+
     // ── normalizeToNegFirst ───────────────────────────────────────────────────
 
     @Test public void normalizeToNegFirstDigit() {
@@ -528,6 +557,16 @@ public class MxEvaluatorTest {
                 MxEvaluator.normalizeToNegFirst("\u22129^2\u00D7\u22124^3"));
     }
 
+    @Test public void normalizeToNegFirstFunction() {
+        // −sin(x)^2 in standard = -(sin(x))^2 = -(sin(x)^2)
+        // After normalizeToNegFirst: −(sin(x)^2) so negFirst still gives -(sin(x)^2)
+        assertEquals("\u2212(sin(x)^2)", MxEvaluator.normalizeToNegFirst("\u2212sin(x)^2"));
+    }
+
+    @Test public void normalizeToNegFirstFunctionNoCaretUnchanged() {
+        assertEquals("\u2212sin(x)+1", MxEvaluator.normalizeToNegFirst("\u2212sin(x)+1"));
+    }
+
     // ── normalizeToStandard ───────────────────────────────────────────────────
 
     @Test public void normalizeToStandardDigit() {
@@ -555,6 +594,14 @@ public class MxEvaluatorTest {
     @Test public void normalizeToStandardMultiplePatterns() {
         assertEquals("(\u22129)^2\u00D7(\u22124)^3",
                 MxEvaluator.normalizeToStandard("\u22129^2\u00D7\u22124^3"));
+    }
+
+    @Test public void normalizeToStandardFunction() {
+        assertEquals("(\u2212sin(x))^2", MxEvaluator.normalizeToStandard("\u2212sin(x)^2"));
+    }
+
+    @Test public void normalizeToStandardFunctionNoCaretUnchanged() {
+        assertEquals("\u2212sin(x)+1", MxEvaluator.normalizeToStandard("\u2212sin(x)+1"));
     }
 
     // ── Normalization round-trips (semantic preservation) ────────────────────
@@ -596,6 +643,20 @@ public class MxEvaluatorTest {
         String expr = "2+\u2212(5+3)^2+1";
         String normalized = MxEvaluator.normalizeToNegFirst(expr);
         assertEquals(eval(expr), evalNegFirst(normalized), 1e-10);
+    }
+
+    @Test public void normalizeNegFirstPreservesFunctionEval() throws Exception {
+        // −sin(π/2)^2 in standard = -1; after normalizeToNegFirst, negFirst also gives -1
+        String expr = "\u2212sin(pi/2)^2";
+        String normalized = MxEvaluator.normalizeToNegFirst(expr);
+        assertEquals(eval(expr), evalNegFirst(normalized), 1e-10);
+    }
+
+    @Test public void normalizeToStdPreservesFunctionEval() throws Exception {
+        // −sin(π/2)^2 in negFirst = 1; after normalizeToStandard, standard also gives 1
+        String expr = "\u2212sin(pi/2)^2";
+        String normalized = MxEvaluator.normalizeToStandard(expr);
+        assertEquals(evalNegFirst(expr), eval(normalized), 1e-10);
     }
 
     // ── Error cases ──────────────────────────────────────────────────────────

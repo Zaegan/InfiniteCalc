@@ -230,7 +230,7 @@ public class MainActivity extends AppCompatActivity {
 
         // ── Arithmetic operators ──────────────────────────────────────────────
         findViewById(R.id.btn_add).setOnClickListener(v ->      { sync(); viewModel.insert("+"); });
-        findViewById(R.id.btn_subtract).setOnClickListener(v -> { sync(); viewModel.insert("\u2212"); });
+        findViewById(R.id.btn_subtract).setOnClickListener(v -> { sync(); viewModel.insertMinus(); });
         findViewById(R.id.btn_multiply).setOnClickListener(v -> { sync(); viewModel.insert("\u00D7"); });
         findViewById(R.id.btn_divide).setOnClickListener(v ->   { sync(); viewModel.insert("\u00F7"); });
 

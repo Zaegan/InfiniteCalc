@@ -162,12 +162,7 @@ public class CalculatorState {
 
     /**
      * Smart negation (standard mode).
-     *
-     * <ul>
-     *   <li>Adjacent to digits: insert {@code (-} before the digit run (no auto-close).</li>
-     *   <li>Before {@code (} or a letter: insert {@code (-} at cursor.</li>
-     *   <li>Otherwise: insert {@code (-} at cursor.</li>
-     * </ul>
+     * Delegates to {@link #smartNegate(boolean)} with {@code false}.
      */
     public void smartNegate() {
         smartNegate(false);
@@ -176,68 +171,92 @@ public class CalculatorState {
     /**
      * Smart negation — behavior depends on mode.
      *
-     * <p><b>Negation-first mode:</b>
-     * <ul>
-     *   <li>Adjacent to digits: toggle a {@code −} prefix before the digit run.</li>
-     *   <li>Before {@code (} or a letter: insert {@code (-} (open scope).</li>
-     *   <li>Otherwise: insert standalone {@code −}.</li>
-     * </ul>
+     * <p>Both modes find a "token start": the start of any adjacent digit run,
+     * the position of an adjacent {@code (} or letter ahead, or the cursor itself.
      *
-     * <p><b>Standard mode:</b>
-     * <ul>
-     *   <li>Adjacent to digits: insert {@code (-} before the digit run (no toggle).</li>
-     *   <li>All other positions: insert {@code (-} at the cursor.</li>
-     * </ul>
+     * <p><b>Negation-first mode:</b> toggles a {@code −} (U+2212) prefix immediately
+     * before the token — same handling for digits, paren groups, and function names.
+     *
+     * <p><b>Standard mode:</b> toggles a {@code (−} (open-paren + U+2212) prefix
+     * immediately before the token.  No auto-close; the user is responsible for the
+     * closing {@code )}.
      */
     public void smartNegate(boolean negationFirstMode) {
         String s = expr.toString();
-        int len = s.length();
+        int tokenStart = findNegationTokenStart(s, cursor);
 
-        // Scan back for a digit run ending at cursor
-        int numStart = cursor;
-        while (numStart > 0 && (Character.isDigit(s.charAt(numStart - 1))
-                || s.charAt(numStart - 1) == '.')) {
-            numStart--;
-        }
-
-        boolean hasDigitsLeft  = numStart < cursor;
-        boolean hasDigitsRight = !hasDigitsLeft && cursor < len
-                && (Character.isDigit(s.charAt(cursor)) || s.charAt(cursor) == '.');
-        if (hasDigitsRight) numStart = cursor;
-
-        if (hasDigitsLeft || hasDigitsRight) {
-            if (negationFirstMode) {
-                // Toggle − before the digit run
-                if (numStart > 0 && s.charAt(numStart - 1) == '\u2212'
-                        && isUnaryAt(s, numStart - 1)) {
-                    expr.deleteCharAt(numStart - 1);
-                    if (cursor > numStart - 1) cursor--;
-                } else {
-                    expr.insert(numStart, '\u2212');
-                    cursor++;
-                }
-            } else {
-                // Standard mode: insert open scope before digit run, no auto-close
-                expr.insert(numStart, "(-");
-                cursor = numStart + 2;
-            }
-            return;
-        }
-
-        // No adjacent digits
         if (negationFirstMode) {
-            if (cursor < len && (s.charAt(cursor) == '(' || Character.isLetter(s.charAt(cursor)))) {
-                expr.insert(cursor, "(-");
-                cursor += 2;
+            // Toggle U+2212 before the token
+            if (tokenStart > 0 && s.charAt(tokenStart - 1) == '\u2212'
+                    && isUnaryAt(s, tokenStart - 1)) {
+                expr.deleteCharAt(tokenStart - 1);
+                if (cursor > tokenStart - 1) cursor--;
             } else {
-                expr.insert(cursor, '\u2212');
-                cursor++;
+                expr.insert(tokenStart, '\u2212');
+                if (cursor >= tokenStart) cursor++;
             }
         } else {
-            // Standard mode: always open a scope
-            expr.insert(cursor, "(-");
+            // Standard mode: toggle (U+2212 before the token
+            if (tokenStart >= 2 && s.charAt(tokenStart - 2) == '('
+                    && s.charAt(tokenStart - 1) == '\u2212') {
+                expr.delete(tokenStart - 2, tokenStart);
+                if (cursor >= tokenStart) cursor -= 2;
+                else if (cursor > tokenStart - 2) cursor = tokenStart - 2;
+            } else {
+                expr.insert(tokenStart, "(\u2212");
+                if (cursor >= tokenStart) cursor += 2;
+            }
+        }
+    }
+
+    /**
+     * Insert {@code (−} at the cursor (standard-mode negation from the minus button).
+     * Toggles: if {@code (−} is already immediately before the cursor, removes it.
+     */
+    public void insertStandardNegation() {
+        String s = expr.toString();
+        if (cursor >= 2 && s.charAt(cursor - 2) == '('
+                && s.charAt(cursor - 1) == '\u2212') {
+            expr.delete(cursor - 2, cursor);
+            cursor -= 2;
+        } else {
+            expr.insert(cursor, "(\u2212");
             cursor += 2;
         }
+    }
+
+    /**
+     * Find the position where a negation prefix should be inserted.
+     * <ul>
+     *   <li>If a digit run ends at (or starts at) the cursor: returns its start.</li>
+     *   <li>If the character at the cursor is {@code (} or a letter: returns the cursor.</li>
+     *   <li>Otherwise: returns the cursor.</li>
+     * </ul>
+     */
+    private static int findNegationTokenStart(String s, int cursor) {
+        // Scan back for digit run ending at cursor
+        int numStart = cursor;
+        while (numStart > 0
+                && (Character.isDigit(s.charAt(numStart - 1))
+                    || s.charAt(numStart - 1) == '.')) {
+            numStart--;
+        }
+        if (numStart < cursor) return numStart;
+
+        // Digit run starting at cursor
+        int len = s.length();
+        if (cursor < len
+                && (Character.isDigit(s.charAt(cursor)) || s.charAt(cursor) == '.')) {
+            return cursor;
+        }
+
+        // '(' or letter directly ahead
+        if (cursor < len
+                && (s.charAt(cursor) == '(' || Character.isLetter(s.charAt(cursor)))) {
+            return cursor;
+        }
+
+        return cursor;
     }
 
     // ── Operator helpers ────────────────────────────────────────────────────

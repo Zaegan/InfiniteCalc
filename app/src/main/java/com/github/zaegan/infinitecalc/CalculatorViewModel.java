@@ -153,6 +153,38 @@ public class CalculatorViewModel extends AndroidViewModel {
         updateDisplay();
     }
 
+    /**
+     * Insert a minus sign, adapting to the current mode and cursor context.
+     *
+     * <ul>
+     *   <li>Standard mode at a unary position: inserts {@code (−} with toggle.</li>
+     *   <li>Standard mode at a binary position: inserts {@code −} (subtraction).</li>
+     *   <li>Negation-first mode: always inserts {@code −} (regular toggle applies).</li>
+     * </ul>
+     */
+    public void insertMinus() {
+        exitVarMode();
+        resetIterationState();
+        if (!negationFirstMode) {
+            String s = state.getExpression();
+            int cur = state.getCursor();
+            if (isUnaryPosition(s, cur)) {
+                state.insertStandardNegation();
+                updateDisplay();
+                return;
+            }
+        }
+        state.insert("\u2212");
+        updateDisplay();
+    }
+
+    private static boolean isUnaryPosition(String s, int cur) {
+        if (cur == 0) return true;
+        char prev = s.charAt(cur - 1);
+        return prev == '+' || prev == '\u2212' || prev == '\u00D7' || prev == '\u00F7'
+                || prev == '^' || prev == '(' || prev == '%';
+    }
+
     // ── Evaluation ──────────────────────────────────────────────────────────
 
     /**

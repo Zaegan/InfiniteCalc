@@ -200,7 +200,37 @@ public class MxEvaluator {
             sb2.append(c);
             i++;
         }
-        return sb2.toString();
+        String pass2 = sb2.toString();
+
+        // Pass 3: wrap -funcname(expr) → (-funcname(expr)) when followed by ^
+        StringBuilder sb3 = new StringBuilder(pass2.length());
+        i = 0;
+        while (i < pass2.length()) {
+            char c = pass2.charAt(i);
+            if (c == '-' && isCasioUnaryPos(pass2, i) && i + 1 < pass2.length()
+                    && pass2.charAt(i + 1) >= 'a' && pass2.charAt(i + 1) <= 'z') {
+                int j = i + 1;
+                while (j < pass2.length()
+                        && (Character.isLetterOrDigit(pass2.charAt(j))
+                            || pass2.charAt(j) == '_')) {
+                    j++;
+                }
+                if (j > i + 1 && j < pass2.length() && pass2.charAt(j) == '(') {
+                    int groupClose = findMatchingClose(pass2, j);
+                    if (groupClose > 0 && groupClose + 1 < pass2.length()
+                            && pass2.charAt(groupClose + 1) == '^') {
+                        sb3.append("(-");
+                        sb3.append(pass2, i + 1, groupClose + 1); // funcname(...)
+                        sb3.append(")");
+                        i = groupClose + 1;
+                        continue;
+                    }
+                }
+            }
+            sb3.append(c);
+            i++;
+        }
+        return sb3.toString();
     }
 
     /** True when {@code pos} is a unary-minus position in ASCII-form text. */
@@ -262,6 +292,29 @@ public class MxEvaluator {
                         i = expEnd;
                         continue;
                     }
+                } else if (i + 1 < expr.length()
+                        && expr.charAt(i + 1) >= 'a' && expr.charAt(i + 1) <= 'z') {
+                    int j = i + 1;
+                    while (j < expr.length()
+                            && (Character.isLetterOrDigit(expr.charAt(j))
+                                || expr.charAt(j) == '_')) {
+                        j++;
+                    }
+                    if (j > i + 1 && j < expr.length() && expr.charAt(j) == '(') {
+                        int groupClose = findMatchingClose(expr, j);
+                        if (groupClose > 0 && groupClose + 1 < expr.length()
+                                && expr.charAt(groupClose + 1) == '^') {
+                            int expEnd = findExponentChainEnd(expr, groupClose + 2);
+                            // −funcname(...)^CHAIN → −(funcname(...)^CHAIN)
+                            sb.append('\u2212').append('(');
+                            sb.append(expr, i + 1, groupClose + 1); // funcname(...)
+                            sb.append('^');
+                            sb.append(expr, groupClose + 2, expEnd);
+                            sb.append(')');
+                            i = expEnd;
+                            continue;
+                        }
+                    }
                 }
             }
             sb.append(c);
@@ -314,6 +367,26 @@ public class MxEvaluator {
                         sb.append(')');
                         i = groupClose + 1; // next char is '^', appended normally
                         continue;
+                    }
+                } else if (i + 1 < expr.length()
+                        && expr.charAt(i + 1) >= 'a' && expr.charAt(i + 1) <= 'z') {
+                    int j = i + 1;
+                    while (j < expr.length()
+                            && (Character.isLetterOrDigit(expr.charAt(j))
+                                || expr.charAt(j) == '_')) {
+                        j++;
+                    }
+                    if (j > i + 1 && j < expr.length() && expr.charAt(j) == '(') {
+                        int groupClose = findMatchingClose(expr, j);
+                        if (groupClose > 0 && groupClose + 1 < expr.length()
+                                && expr.charAt(groupClose + 1) == '^') {
+                            // −funcname(...)^... → (−funcname(...))^...
+                            sb.append('(').append('\u2212');
+                            sb.append(expr, i + 1, groupClose + 1); // funcname(...)
+                            sb.append(')');
+                            i = groupClose + 1; // next char is '^'
+                            continue;
+                        }
                     }
                 }
             }
