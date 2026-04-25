@@ -8,6 +8,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -114,8 +115,14 @@ public class HistoryAdapter extends ListAdapter<HistoryListItem, RecyclerView.Vi
             holder.chevron.setOnClickListener(v -> {
                 int pos = holder.getAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION) {
+                    RecyclerView rv = (RecyclerView) holder.itemView.getParent();
+                    int itemTop = holder.itemView.getTop();
                     group.setExpanded(!group.isExpanded());
                     notifyItemChanged(pos);
+                    rv.post(() -> {
+                        LinearLayoutManager lm = (LinearLayoutManager) rv.getLayoutManager();
+                        if (lm != null) lm.scrollToPositionWithOffset(pos, itemTop);
+                    });
                 }
             });
         } else {
