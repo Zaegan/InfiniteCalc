@@ -40,7 +40,7 @@ public class SettingsDialog extends DialogFragment {
         // ── Theme selector ────────────────────────────────────────────────────
         SharedPreferences prefs = requireActivity()
                 .getSharedPreferences("remap_prefs", android.content.Context.MODE_PRIVATE);
-        String currentTheme = prefs.getString("theme_mode", "system");
+        String currentTheme = prefs.getString("theme_mode", "dark");
 
         Button btnDark   = view.findViewById(R.id.btn_theme_dark);
         Button btnLight  = view.findViewById(R.id.btn_theme_light);
