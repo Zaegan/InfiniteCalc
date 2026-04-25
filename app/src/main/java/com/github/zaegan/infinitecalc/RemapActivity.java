@@ -2,6 +2,8 @@ package com.github.zaegan.infinitecalc;
 
 import android.content.ClipData;
 import android.content.res.ColorStateList;
+
+import androidx.core.content.ContextCompat;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -58,8 +60,9 @@ public class RemapActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(Color.parseColor("#121212"));
-            getWindow().setNavigationBarColor(Color.parseColor("#121212"));
+            int bgColor = ContextCompat.getColor(this, R.color.bg);
+            getWindow().setStatusBarColor(bgColor);
+            getWindow().setNavigationBarColor(bgColor);
         }
 
         setContentView(R.layout.activity_remap);
@@ -97,8 +100,18 @@ public class RemapActivity extends AppCompatActivity {
         // Control row (permanent)
         addSectionLabel("Controls");
         addPermanentRow(new String[]{"STO","REC","EXT","⌫","AC"},
-                new int[]{0xFFFFB060,0xFF60B0FF,0xFFAAFFAA,0xFFFFAAAA,0xFFFF8080},
-                new int[]{0xFF3A2000,0xFF001E3A,0xFF0A2A0A,0xFF2A1010,0xFF3A0000});
+                new int[]{
+                    ContextCompat.getColor(this, R.color.btn_sto_text),
+                    ContextCompat.getColor(this, R.color.btn_rec_text),
+                    ContextCompat.getColor(this, R.color.btn_ext_text),
+                    ContextCompat.getColor(this, R.color.btn_back_text),
+                    ContextCompat.getColor(this, R.color.btn_clear_text)},
+                new int[]{
+                    ContextCompat.getColor(this, R.color.btn_sto_bg),
+                    ContextCompat.getColor(this, R.color.btn_rec_bg),
+                    ContextCompat.getColor(this, R.color.btn_ext_bg),
+                    ContextCompat.getColor(this, R.color.btn_back_bg),
+                    ContextCompat.getColor(this, R.color.btn_clear_bg)});
 
         // Ext pages
         addSectionLabel("Extended Buttons");
@@ -117,7 +130,8 @@ public class RemapActivity extends AppCompatActivity {
         // Enter row (permanent)
         addSectionLabel("Enter");
         addPermanentRow(new String[]{"="},
-                new int[]{0xFF80FF90}, new int[]{0xFF0A3A0A});
+                new int[]{ContextCompat.getColor(this, R.color.btn_equal_text)},
+                new int[]{ContextCompat.getColor(this, R.color.btn_equal_bg)});
 
         // Custom palette
         addSectionLabel("Custom Buttons");
@@ -129,7 +143,7 @@ public class RemapActivity extends AppCompatActivity {
     private void addSectionLabel(String text) {
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextColor(0xFF888888);
+        tv.setTextColor(ContextCompat.getColor(this, R.color.text_muted));
         tv.setTextSize(11f);
         tv.setPadding(dp(10), dp(6), dp(10), dp(2));
         rowsContainer.addView(tv);
@@ -159,7 +173,9 @@ public class RemapActivity extends AppCompatActivity {
         LinearLayout row2 = new LinearLayout(this);
         row2.setOrientation(LinearLayout.HORIZONTAL);
 
-        Button prev = makeButton("‹", 0xFF80AABB, 0xFF1A2A30, 1f, 52);
+        Button prev = makeButton("‹",
+                ContextCompat.getColor(this, R.color.btn_nav_text),
+                ContextCompat.getColor(this, R.color.btn_nav_bg), 1f, 52);
         prev.setAlpha(0.5f);
         prev.setClickable(false);
         row2.addView(prev);
@@ -171,7 +187,9 @@ public class RemapActivity extends AppCompatActivity {
                 0, dp(52), Math.max(page.row2Middle.size(), 1));
         row2.addView(mid, midLp);
 
-        Button next = makeButton("›", 0xFF80AABB, 0xFF1A2A30, 1f, 52);
+        Button next = makeButton("›",
+                ContextCompat.getColor(this, R.color.btn_nav_text),
+                ContextCompat.getColor(this, R.color.btn_nav_bg), 1f, 52);
         next.setAlpha(0.5f);
         next.setClickable(false);
         row2.addView(next);
@@ -209,8 +227,8 @@ public class RemapActivity extends AppCompatActivity {
         Button addBtn = new Button(this);
         addBtn.setAllCaps(false);
         addBtn.setText("＋ New");
-        addBtn.setTextColor(0xFFAAAAFF);
-        addBtn.setBackgroundTintList(ColorStateList.valueOf(0xFF1A1A3A));
+        addBtn.setTextColor(ContextCompat.getColor(this, R.color.remap_add_text));
+        addBtn.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, R.color.remap_add_bg)));
         LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, dp(52));
         addLp.setMargins(dp(2), dp(2), dp(2), dp(2));
@@ -237,7 +255,7 @@ public class RemapActivity extends AppCompatActivity {
         if (customPalette.isEmpty()) {
             TextView hint = new TextView(this);
             hint.setText("Tap ＋ New to create a custom button, then drag it into any slot above.");
-            hint.setTextColor(0xFF555555);
+            hint.setTextColor(ContextCompat.getColor(this, R.color.text_faint));
             hint.setTextSize(11f);
             hint.setPadding(dp(10), dp(2), dp(10), dp(8));
             rowsContainer.addView(hint);
@@ -282,9 +300,9 @@ public class RemapActivity extends AppCompatActivity {
         Button del = new Button(this);
         del.setAllCaps(false);
         del.setText("×");
-        del.setTextColor(0xFFFF6666);
+        del.setTextColor(ContextCompat.getColor(this, R.color.remap_del_text));
         del.setTextSize(11f);
-        del.setBackgroundTintList(ColorStateList.valueOf(0xFF2A0000));
+        del.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, R.color.remap_del_bg)));
         LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(22));
         del.setLayoutParams(delLp);
@@ -337,16 +355,16 @@ public class RemapActivity extends AppCompatActivity {
 
         TextView insertLabelHint = new TextView(this);
         insertLabelHint.setText("Label (shown on button)");
-        insertLabelHint.setTextColor(0xFF888888);
+        insertLabelHint.setTextColor(ContextCompat.getColor(this, R.color.text_muted));
         insertLabelHint.setTextSize(12f);
         insertSection.addView(insertLabelHint);
 
         EditText insertLabelEdit = new EditText(this);
         insertLabelEdit.setInputType(InputType.TYPE_CLASS_TEXT);
         insertLabelEdit.setHint("e.g.  x²");
-        insertLabelEdit.setHintTextColor(0xFF555555);
-        insertLabelEdit.setTextColor(0xFFFFFFFF);
-        insertLabelEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        insertLabelEdit.setHintTextColor(ContextCompat.getColor(this, R.color.remap_input_hint));
+        insertLabelEdit.setTextColor(ContextCompat.getColor(this, R.color.remap_input_text));
+        insertLabelEdit.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, R.color.remap_input_bg)));
         LinearLayout.LayoutParams iLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         iLp.bottomMargin = fieldMarginBottom;
@@ -355,16 +373,16 @@ public class RemapActivity extends AppCompatActivity {
 
         TextView insertTextHint = new TextView(this);
         insertTextHint.setText("Insert text (typed into expression)");
-        insertTextHint.setTextColor(0xFF888888);
+        insertTextHint.setTextColor(ContextCompat.getColor(this, R.color.text_muted));
         insertTextHint.setTextSize(12f);
         insertSection.addView(insertTextHint);
 
         EditText insertTextEdit = new EditText(this);
         insertTextEdit.setInputType(InputType.TYPE_CLASS_TEXT);
         insertTextEdit.setHint("e.g.  ^2");
-        insertTextEdit.setHintTextColor(0xFF555555);
-        insertTextEdit.setTextColor(0xFFFFFFFF);
-        insertTextEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        insertTextEdit.setHintTextColor(ContextCompat.getColor(this, R.color.remap_input_hint));
+        insertTextEdit.setTextColor(ContextCompat.getColor(this, R.color.remap_input_text));
+        insertTextEdit.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, R.color.remap_input_bg)));
         insertSection.addView(insertTextEdit);
 
         layout.addView(insertSection);
@@ -376,16 +394,16 @@ public class RemapActivity extends AppCompatActivity {
 
         TextView setNameHint = new TextView(this);
         setNameHint.setText("Variable name (stored as _ic_<name>)");
-        setNameHint.setTextColor(0xFF888888);
+        setNameHint.setTextColor(ContextCompat.getColor(this, R.color.text_muted));
         setNameHint.setTextSize(12f);
         setSection.addView(setNameHint);
 
         EditText setNameEdit = new EditText(this);
         setNameEdit.setInputType(InputType.TYPE_CLASS_TEXT);
         setNameEdit.setHint("e.g.  result");
-        setNameEdit.setHintTextColor(0xFF555555);
-        setNameEdit.setTextColor(0xFFFFFFFF);
-        setNameEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        setNameEdit.setHintTextColor(ContextCompat.getColor(this, R.color.remap_input_hint));
+        setNameEdit.setTextColor(ContextCompat.getColor(this, R.color.remap_input_text));
+        setNameEdit.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, R.color.remap_input_bg)));
         LinearLayout.LayoutParams snLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         snLp.bottomMargin = fieldMarginBottom;
@@ -394,15 +412,15 @@ public class RemapActivity extends AppCompatActivity {
 
         TextView setFromHint = new TextView(this);
         setFromHint.setText("FROM expression (use _ic_current for display value)");
-        setFromHint.setTextColor(0xFF888888);
+        setFromHint.setTextColor(ContextCompat.getColor(this, R.color.text_muted));
         setFromHint.setTextSize(12f);
         setSection.addView(setFromHint);
 
         EditText setFromEdit = new EditText(this);
         setFromEdit.setInputType(InputType.TYPE_CLASS_TEXT);
         setFromEdit.setText("_ic_current");
-        setFromEdit.setTextColor(0xFFFFFFFF);
-        setFromEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        setFromEdit.setTextColor(ContextCompat.getColor(this, R.color.remap_input_text));
+        setFromEdit.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, R.color.remap_input_bg)));
         LinearLayout.LayoutParams sfLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         sfLp.bottomMargin = fieldMarginBottom;
@@ -411,16 +429,16 @@ public class RemapActivity extends AppCompatActivity {
 
         TextView setLabelHint = new TextView(this);
         setLabelHint.setText("Label (shown on button, optional)");
-        setLabelHint.setTextColor(0xFF888888);
+        setLabelHint.setTextColor(ContextCompat.getColor(this, R.color.text_muted));
         setLabelHint.setTextSize(12f);
         setSection.addView(setLabelHint);
 
         EditText setLabelEdit = new EditText(this);
         setLabelEdit.setInputType(InputType.TYPE_CLASS_TEXT);
         setLabelEdit.setHint("e.g.  →result");
-        setLabelEdit.setHintTextColor(0xFF555555);
-        setLabelEdit.setTextColor(0xFFFFFFFF);
-        setLabelEdit.setBackgroundTintList(ColorStateList.valueOf(0xFF444444));
+        setLabelEdit.setHintTextColor(ContextCompat.getColor(this, R.color.remap_input_hint));
+        setLabelEdit.setTextColor(ContextCompat.getColor(this, R.color.remap_input_text));
+        setLabelEdit.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, R.color.remap_input_bg)));
         setSection.addView(setLabelEdit);
 
         layout.addView(setSection);
@@ -428,28 +446,35 @@ public class RemapActivity extends AppCompatActivity {
         // ── Mode toggle wiring ────────────────────────────────────────────────
         final boolean[] setMode = {false};
 
-        btnModeInsert.setBackgroundTintList(ColorStateList.valueOf(0xFF1A3A1A));
-        btnModeInsert.setTextColor(0xFFAAFFAA);
-        btnModeSet.setBackgroundTintList(ColorStateList.valueOf(0xFF1A1A1A));
-        btnModeSet.setTextColor(0xFF666666);
+        int insertOnBg  = ContextCompat.getColor(this, R.color.remap_insert_on_bg);
+        int insertOnTxt = ContextCompat.getColor(this, R.color.remap_insert_on_text);
+        int setOnBg     = ContextCompat.getColor(this, R.color.remap_set_on_bg);
+        int setOnTxt    = ContextCompat.getColor(this, R.color.remap_set_on_text);
+        int offBg       = ContextCompat.getColor(this, R.color.remap_mode_off_bg);
+        int offTxt      = ContextCompat.getColor(this, R.color.remap_mode_off_text);
+
+        btnModeInsert.setBackgroundTintList(ColorStateList.valueOf(insertOnBg));
+        btnModeInsert.setTextColor(insertOnTxt);
+        btnModeSet.setBackgroundTintList(ColorStateList.valueOf(offBg));
+        btnModeSet.setTextColor(offTxt);
 
         btnModeInsert.setOnClickListener(v -> {
             setMode[0] = false;
             insertSection.setVisibility(View.VISIBLE);
             setSection.setVisibility(View.GONE);
-            btnModeInsert.setBackgroundTintList(ColorStateList.valueOf(0xFF1A3A1A));
-            btnModeInsert.setTextColor(0xFFAAFFAA);
-            btnModeSet.setBackgroundTintList(ColorStateList.valueOf(0xFF1A1A1A));
-            btnModeSet.setTextColor(0xFF666666);
+            btnModeInsert.setBackgroundTintList(ColorStateList.valueOf(insertOnBg));
+            btnModeInsert.setTextColor(insertOnTxt);
+            btnModeSet.setBackgroundTintList(ColorStateList.valueOf(offBg));
+            btnModeSet.setTextColor(offTxt);
         });
         btnModeSet.setOnClickListener(v -> {
             setMode[0] = true;
             insertSection.setVisibility(View.GONE);
             setSection.setVisibility(View.VISIBLE);
-            btnModeSet.setBackgroundTintList(ColorStateList.valueOf(0xFF2A1A00));
-            btnModeSet.setTextColor(0xFFFFAA40);
-            btnModeInsert.setBackgroundTintList(ColorStateList.valueOf(0xFF1A1A1A));
-            btnModeInsert.setTextColor(0xFF666666);
+            btnModeSet.setBackgroundTintList(ColorStateList.valueOf(setOnBg));
+            btnModeSet.setTextColor(setOnTxt);
+            btnModeInsert.setBackgroundTintList(ColorStateList.valueOf(offBg));
+            btnModeInsert.setTextColor(offTxt);
         });
 
         new AlertDialog.Builder(this)
@@ -533,9 +558,15 @@ public class RemapActivity extends AppCompatActivity {
         phantom.setGravity(Gravity.CENTER);
         phantom.setPadding(dp(8), dp(4), dp(8), dp(4));
 
+        int dropBg           = ContextCompat.getColor(this, R.color.remap_drop_bg);
+        int dropBorder       = ContextCompat.getColor(this, R.color.remap_drop_border);
+        int dropLbl          = ContextCompat.getColor(this, R.color.remap_drop_label);
+        int dropHoverBorder  = ContextCompat.getColor(this, R.color.remap_drop_hover_border);
+        int dropHoverLbl     = ContextCompat.getColor(this, R.color.remap_drop_hover_label);
+
         GradientDrawable border = new GradientDrawable();
-        border.setColor(0xFF1A1A1A);
-        border.setStroke(dp(1), 0xFF444444);
+        border.setColor(dropBg);
+        border.setStroke(dp(1), dropBorder);
         border.setCornerRadius(dp(4));
         phantom.setBackground(border);
 
@@ -546,7 +577,7 @@ public class RemapActivity extends AppCompatActivity {
 
         TextView label = new TextView(this);
         label.setText("Drop here to add a new page");
-        label.setTextColor(0xFF555555);
+        label.setTextColor(dropLbl);
         label.setTextSize(12f);
         label.setGravity(Gravity.CENTER);
         phantom.addView(label);
@@ -556,16 +587,16 @@ public class RemapActivity extends AppCompatActivity {
                 case DragEvent.ACTION_DRAG_STARTED:
                     return true;
                 case DragEvent.ACTION_DRAG_ENTERED:
-                    border.setStroke(dp(2), 0xFF80FF90);
-                    label.setTextColor(0xFF80FF90);
+                    border.setStroke(dp(2), dropHoverBorder);
+                    label.setTextColor(dropHoverLbl);
                     return true;
                 case DragEvent.ACTION_DRAG_EXITED:
-                    border.setStroke(dp(1), 0xFF444444);
-                    label.setTextColor(0xFF555555);
+                    border.setStroke(dp(1), dropBorder);
+                    label.setTextColor(dropLbl);
                     return true;
                 case DragEvent.ACTION_DROP:
-                    border.setStroke(dp(1), 0xFF444444);
-                    label.setTextColor(0xFF555555);
+                    border.setStroke(dp(1), dropBorder);
+                    label.setTextColor(dropLbl);
                     String tag = (String) event.getClipData().getItemAt(0).getText();
                     dropOntoPhantomPage(tag);
                     return true;

@@ -13,7 +13,7 @@
         android:layout_width="0dp"
         android:layout_height="1dp"
         android:layout_weight="1"
-        android:background="#2a2a2a" />
+        android:background="@color/divider" />
 
     <TextView
         android:id="@+id/date_label"
@@ -21,7 +21,7 @@
         android:layout_height="wrap_content"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
-        android:textColor="#505050"
+        android:textColor="@color/text_micro"
         android:textSize="11sp"
         android:textAllCaps="true" />
 
@@ -29,6 +29,6 @@
         android:layout_width="0dp"
         android:layout_height="1dp"
         android:layout_weight="1"
-        android:background="#2a2a2a" />
+        android:background="@color/divider" />
 
 </LinearLayout>

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Light palette (default) -->
+<resources>
+    <!-- Surfaces -->
+    <color name="bg">#e8e8e8</color>
+    <color name="surface">#d4d4d4</color>
+    <color name="surface_header">#dadada</color>
+    <color name="divider">#bbbbbb</color>
+    <color name="divider_strong">#aaaaaa</color>
+    <color name="divider_subtle">#cccccc</color>
+
+    <!-- Text -->
+    <color name="text_primary">#111111</color>
+    <color name="text_secondary">#222222</color>
+    <color name="text_muted">#666666</color>
+    <color name="text_dim">#888888</color>
+    <color name="text_faint">#999999</color>
+    <color name="text_ghost">#aaaaaa</color>
+    <color name="text_micro">#909090</color>
+
+    <!-- Results -->
+    <color name="result_primary">#2e7d32</color>
+    <color name="result_secondary">#388e3c</color>
+
+    <!-- Syntax highlight -->
+    <color name="syntax_op">#007a99</color>
+
+    <!-- STO (orange) -->
+    <color name="btn_sto_text">#c05000</color>
+    <color name="btn_sto_bg">#fff0e0</color>
+    <color name="btn_sto_active_bg">#ff8030</color>
+
+    <!-- REC (blue) -->
+    <color name="btn_rec_text">#0060c0</color>
+    <color name="btn_rec_bg">#e0f0ff</color>
+    <color name="btn_rec_active_bg">#0080ff</color>
+
+    <!-- EXT (green) -->
+    <color name="btn_ext_text">#006600</color>
+    <color name="btn_ext_bg">#e0ffe0</color>
+
+    <!-- Equal -->
+    <color name="btn_equal_text">#004d00</color>
+    <color name="btn_equal_bg">#e0ffe8</color>
+
+    <!-- Backspace -->
+    <color name="btn_back_text">#c00000</color>
+    <color name="btn_back_bg">#ffe0e0</color>
+
+    <!-- AC -->
+    <color name="btn_clear_text">#aa0000</color>
+    <color name="btn_clear_bg">#ffd0d0</color>
+
+    <!-- Nav ‹ › -->
+    <color name="btn_nav_text">#406070</color>
+    <color name="btn_nav_bg">#ddeef4</color>
+
+    <!-- Variables A–T -->
+    <color name="btn_var_text">#5010a0</color>
+    <color name="btn_var_bg">#f0eaff</color>
+
+    <!-- Variables U–Z α β -->
+    <color name="btn_var_ext_text">#2030a0</color>
+    <color name="btn_var_ext_bg">#e8eeff</color>
+
+    <!-- Remap: + New -->
+    <color name="remap_add_text">#2020c0</color>
+    <color name="remap_add_bg">#eeeeff</color>
+
+    <!-- Remap: × delete -->
+    <color name="remap_del_text">#cc0000</color>
+    <color name="remap_del_bg">#ffe0e0</color>
+
+    <!-- Remap: Insert mode active -->
+    <color name="remap_insert_on_text">#004400</color>
+    <color name="remap_insert_on_bg">#ddfadd</color>
+
+    <!-- Remap: Set mode active -->
+    <color name="remap_set_on_text">#774400</color>
+    <color name="remap_set_on_bg">#fff8e0</color>
+
+    <!-- Remap: mode button off -->
+    <color name="remap_mode_off_text">#999999</color>
+    <color name="remap_mode_off_bg">#e0e0e0</color>
+
+    <!-- Remap: input fields -->
+    <color name="remap_input_text">#111111</color>
+    <color name="remap_input_bg">#c8c8c8</color>
+    <color name="remap_input_hint">#aaaaaa</color>
+
+    <!-- Remap: drop zone -->
+    <color name="remap_drop_bg">#e8e8e8</color>
+    <color name="remap_drop_border">#aaaaaa</color>
+    <color name="remap_drop_label">#999999</color>
+    <color name="remap_drop_hover_border">#00aa40</color>
+    <color name="remap_drop_hover_label">#00aa40</color>
+</resources>

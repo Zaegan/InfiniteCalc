@@ -28,6 +28,8 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.content.ContextCompat;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -81,11 +83,17 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Apply saved theme before super so the window gets the right background
+        String themeMode = getSharedPreferences("remap_prefs", MODE_PRIVATE)
+                .getString("theme_mode", "system");
+        applyThemeMode(themeMode);
+
         super.onCreate(savedInstanceState);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(Color.parseColor("#121212"));
-            getWindow().setNavigationBarColor(Color.parseColor("#121212"));
+            int bgColor = ContextCompat.getColor(this, R.color.bg);
+            getWindow().setStatusBarColor(bgColor);
+            getWindow().setNavigationBarColor(bgColor);
         }
 
         setContentView(R.layout.activity_main);
@@ -508,15 +516,17 @@ public class MainActivity extends AppCompatActivity {
         boolean stoActive = mode == CalculatorViewModel.VarMode.STO;
         boolean recActive = mode == CalculatorViewModel.VarMode.REC;
 
-        btnSto.setBackgroundTintList(ColorStateList.valueOf(
-                Color.parseColor(stoActive ? "#d45000" : "#3a2000")));
-        btnSto.setTextColor(stoActive ? Color.WHITE : Color.parseColor("#ffb060"));
+        btnSto.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this,
+                stoActive ? R.color.btn_sto_active_bg : R.color.btn_sto_bg)));
+        btnSto.setTextColor(stoActive ? Color.WHITE
+                : ContextCompat.getColor(this, R.color.btn_sto_text));
         btnSto.setStrokeColor(ColorStateList.valueOf(stoActive ? haloColor : Color.TRANSPARENT));
         btnSto.setStrokeWidth(stoActive ? strokePx : 0);
 
-        btnRec.setBackgroundTintList(ColorStateList.valueOf(
-                Color.parseColor(recActive ? "#0055cc" : "#001e3a")));
-        btnRec.setTextColor(recActive ? Color.WHITE : Color.parseColor("#60b0ff"));
+        btnRec.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this,
+                recActive ? R.color.btn_rec_active_bg : R.color.btn_rec_bg)));
+        btnRec.setTextColor(recActive ? Color.WHITE
+                : ContextCompat.getColor(this, R.color.btn_rec_text));
         btnRec.setStrokeColor(ColorStateList.valueOf(recActive ? haloColor : Color.TRANSPARENT));
         btnRec.setStrokeWidth(recActive ? strokePx : 0);
     }
@@ -525,7 +535,7 @@ public class MainActivity extends AppCompatActivity {
 
     private SpannableString buildDisplayText(String expr) {
         SpannableString ss = new SpannableString(expr);
-        int opColor = Color.parseColor("#bdfcff");
+        int opColor = ContextCompat.getColor(this, R.color.syntax_op);
         for (int i = 0; i < expr.length(); i++) {
             char c = expr.charAt(i);
             if (c == '\u2212') {
@@ -617,6 +627,14 @@ public class MainActivity extends AppCompatActivity {
 
     private void sync() {
         viewModel.syncCursor(expressionDisplay.getSelectionStart());
+    }
+
+    static void applyThemeMode(String mode) {
+        switch (mode) {
+            case "dark":   AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES); break;
+            case "light":  AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO); break;
+            default:       AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM); break;
+        }
     }
 
     private int dp(int dp) {
