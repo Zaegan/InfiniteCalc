@@ -48,6 +48,7 @@ public class RemapActivity extends AppCompatActivity {
 
     private LinearLayout rowsContainer;
     private ScrollView scrollView;
+    private TutorialManager tutorialManager;
 
     // Highlights all drop insert-zones during a drag
     private final List<View> activeInsertZones = new ArrayList<>();
@@ -62,6 +63,7 @@ public class RemapActivity extends AppCompatActivity {
         }
 
         setContentView(R.layout.activity_remap);
+        tutorialManager = new TutorialManager(this);
 
         scrollView    = findViewById(R.id.remap_scroll);
         rowsContainer = findViewById(R.id.remap_rows_container);
@@ -213,7 +215,20 @@ public class RemapActivity extends AppCompatActivity {
                 LinearLayout.LayoutParams.WRAP_CONTENT, dp(52));
         addLp.setMargins(dp(2), dp(2), dp(2), dp(2));
         addBtn.setLayoutParams(addLp);
-        addBtn.setOnClickListener(v -> showCreateButtonDialog());
+        addBtn.setOnClickListener(v -> {
+            if (!tutorialManager.isSeen(TutorialManager.ADD_BUTTON)) {
+                tutorialManager.markSeen(TutorialManager.ADD_BUTTON);
+                TutorialContent.Entry entry = TutorialContent.get(TutorialManager.ADD_BUTTON);
+                new AlertDialog.Builder(this)
+                        .setTitle(entry.title)
+                        .setMessage(entry.body)
+                        .setPositiveButton("Got it", (d, w) -> showCreateButtonDialog())
+                        .setCancelable(false)
+                        .show();
+            } else {
+                showCreateButtonDialog();
+            }
+        });
         row.addView(addBtn);
 
         rowsContainer.addView(row);

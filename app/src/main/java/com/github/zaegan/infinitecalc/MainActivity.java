@@ -26,6 +26,7 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -49,6 +50,13 @@ public class MainActivity extends AppCompatActivity {
 
     private RemapConfig remapConfig;
     private SharedPreferences remapPrefs;
+    private TutorialManager tutorialManager;
+
+    private static final String[] INTRO_IDS = {
+        TutorialManager.INTRO_ACCORDION,
+        TutorialManager.INTRO_HISTORY_COPY,
+        TutorialManager.INTRO_EXT,
+    };
 
     // Containers populated programmatically from RemapConfig
     private LinearLayout containerExtRow1;
@@ -87,6 +95,7 @@ public class MainActivity extends AppCompatActivity {
         // Load remap config
         remapPrefs = getSharedPreferences("remap_prefs", MODE_PRIVATE);
         remapConfig = RemapConfig.load(remapPrefs);
+        tutorialManager = new TutorialManager(this);
 
         expressionDisplay = findViewById(R.id.display);
         setupExpressionDisplay();
@@ -225,8 +234,10 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_equal_var).setOnClickListener(v -> viewModel.onEquals());
 
         // ── STO / REC ────────────────────────────────────────────────────────
-        findViewById(R.id.btn_sto).setOnClickListener(v -> viewModel.enterStoMode());
-        findViewById(R.id.btn_rec).setOnClickListener(v -> viewModel.enterRecMode());
+        findViewById(R.id.btn_sto).setOnClickListener(v ->
+                maybeShowTutorial(TutorialManager.STO, () -> viewModel.enterStoMode()));
+        findViewById(R.id.btn_rec).setOnClickListener(v ->
+                maybeShowTutorial(TutorialManager.REC, () -> viewModel.enterRecMode()));
 
         // ── Variable panel: A–T ──────────────────────────────────────────────
         int[] varBasicIds = {
@@ -257,6 +268,9 @@ public class MainActivity extends AppCompatActivity {
                 sync(); viewModel.onVariableTapped(varName);
             });
         }
+
+        // Show intro tutorials (accordion, history copy, EXT) sequentially on first launch
+        showNextIntroFrom(0);
     }
 
     // ── Dynamic row building ─────────────────────────────────────────────────
@@ -332,6 +346,16 @@ public class MainActivity extends AppCompatActivity {
     // ── Button action dispatcher ─────────────────────────────────────────────
 
     private void handleButtonAction(ButtonDef def, Button btn) {
+        String tutId = getTutorialId(def);
+        if (tutId != null && !tutorialManager.isSeen(tutId)) {
+            tutorialManager.markSeen(tutId);
+            showTutorial(tutId, () -> executeButtonAction(def, btn));
+        } else {
+            executeButtonAction(def, btn);
+        }
+    }
+
+    private void executeButtonAction(ButtonDef def, Button btn) {
         switch (def.getActionType()) {
             case SMART_PAREN:
                 viewModel.smartParen();
@@ -362,6 +386,98 @@ public class MainActivity extends AppCompatActivity {
                 }
                 break;
         }
+    }
+
+    /** Returns the tutorial ID for this button, or null if none applies. */
+    private String getTutorialId(ButtonDef def) {
+        switch (def.getActionType()) {
+            case RAD_DEG: return TutorialManager.RAD_DEG;
+            case REMAP:   return TutorialManager.REMAP;
+            case CUSTOM:
+                if (TWO_ARG_INSERTS.contains(def.insertText)) {
+                    return getTwoArgTutorialId(def.insertText);
+                }
+                return null;
+            default:
+                return null;
+        }
+    }
+
+    private String getTwoArgTutorialId(String insertText) {
+        switch (insertText) {
+            case "logn(":  return TutorialManager.FUNC_LOGN;
+            case "nthrt(": return TutorialManager.FUNC_NTHRT;
+            case "ncr(":   return TutorialManager.FUNC_NCR;
+            case "npr(":   return TutorialManager.FUNC_NPR;
+            case "round(": return TutorialManager.FUNC_ROUND;
+            case "mod(":   return TutorialManager.FUNC_MOD;
+            default:       return null;
+        }
+    }
+
+    // ── Tutorial helpers ──────────────────────────────────────────────────────
+
+    /**
+     * Shows the tutorial for {@code id} if not yet seen, then runs {@code action}.
+     * If already seen, runs {@code action} immediately.
+     */
+    private void maybeShowTutorial(String id, Runnable action) {
+        if (!tutorialManager.isSeen(id)) {
+            tutorialManager.markSeen(id);
+            showTutorial(id, action);
+        } else {
+            action.run();
+        }
+    }
+
+    /** Shows a single tutorial dialog and runs {@code onDone} when dismissed. */
+    private void showTutorial(String id, Runnable onDone) {
+        TutorialContent.Entry entry = TutorialContent.get(id);
+        if (entry == null) { if (onDone != null) onDone.run(); return; }
+        new AlertDialog.Builder(this)
+                .setTitle(entry.title)
+                .setMessage(entry.body)
+                .setPositiveButton("Got it", (d, w) -> { if (onDone != null) onDone.run(); })
+                .setCancelable(false)
+                .show();
+    }
+
+    /**
+     * Walks the INTRO_IDS array from {@code index}, skipping already-seen entries,
+     * and shows each unseen intro tutorial in sequence.
+     * The last unseen intro shows "Got it"; earlier ones show "Next" and "Skip all".
+     */
+    private void showNextIntroFrom(int index) {
+        // Advance past any already-seen entries
+        while (index < INTRO_IDS.length && tutorialManager.isSeen(INTRO_IDS[index])) index++;
+        if (index >= INTRO_IDS.length) return;
+
+        // Check whether any later unseen entries remain (determines Next vs Got it)
+        boolean isLast = true;
+        for (int i = index + 1; i < INTRO_IDS.length; i++) {
+            if (!tutorialManager.isSeen(INTRO_IDS[i])) { isLast = false; break; }
+        }
+
+        final int currentIndex = index;
+        tutorialManager.markSeen(INTRO_IDS[currentIndex]);
+        TutorialContent.Entry entry = TutorialContent.get(INTRO_IDS[currentIndex]);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle(entry.title)
+                .setMessage(entry.body)
+                .setCancelable(false)
+                .setPositiveButton(isLast ? "Got it" : "Next",
+                        (d, w) -> showNextIntroFrom(currentIndex + 1));
+
+        if (!isLast) {
+            builder.setNegativeButton("Skip all", (d, w) -> {
+                for (int i = currentIndex; i < INTRO_IDS.length; i++) {
+                    tutorialManager.markSeen(INTRO_IDS[i]);
+                }
+            });
+        }
+
+        builder.show();
     }
 
     private void executeSetCommand(String insertText) {
