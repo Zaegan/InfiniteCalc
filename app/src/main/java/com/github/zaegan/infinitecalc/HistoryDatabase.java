@@ -57,6 +57,13 @@ public class HistoryDatabase extends SQLiteOpenHelper {
         onCreate(db);
     }
 
+    public static synchronized void closeAndReset() {
+        if (INSTANCE != null) {
+            INSTANCE.close();
+            INSTANCE = null;
+        }
+    }
+
     // ── Queries ──────────────────────────────────────────────────────────────
 
     /**

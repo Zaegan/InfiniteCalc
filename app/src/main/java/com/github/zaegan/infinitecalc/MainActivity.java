@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Spannable;
@@ -36,8 +37,16 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.button.MaterialButton;
 
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -74,12 +83,26 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<Intent> remapLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
                     result -> {
-                        // Reload config whether Lock or Discard — RemapActivity always
-                        // saves on Lock; on Discard the prefs are unchanged.
                         remapConfig = RemapConfig.load(remapPrefs);
                         rebuildBasicRows();
                         rebuildExtPage(currentExtPage);
                     });
+
+    private final ActivityResultLauncher<String[]> historyImportLauncher =
+            registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+                if (uri == null) return;
+                new AlertDialog.Builder(this)
+                        .setTitle("Replace history?")
+                        .setMessage("This will permanently replace your current history.")
+                        .setPositiveButton("Replace", (d, w) -> doHistoryImport(uri))
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            });
+
+    private final ActivityResultLauncher<String[]> configImportLauncher =
+            registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+                if (uri != null) doConfigImport(uri);
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -627,6 +650,105 @@ public class MainActivity extends AppCompatActivity {
 
     private void sync() {
         viewModel.syncCursor(expressionDisplay.getSelectionStart());
+    }
+
+    // ── Export / Import entry points (called from SettingsDialog) ────────────
+
+    void launchHistoryImport() {
+        historyImportLauncher.launch(new String[]{"*/*"});
+    }
+
+    void launchConfigImport() {
+        configImportLauncher.launch(new String[]{"application/json", "*/*"});
+    }
+
+    private void doHistoryImport(Uri uri) {
+        new Thread(() -> {
+            try {
+                InputStream is = getContentResolver().openInputStream(uri);
+                File dst = getDatabasePath("calc_history.db");
+                dst.getParentFile().mkdirs();
+                HistoryDatabase.closeAndReset();
+                try (FileOutputStream fos = new FileOutputStream(dst)) {
+                    copyStream(is, fos);
+                }
+                is.close();
+                new File(dst.getPath() + "-wal").delete();
+                new File(dst.getPath() + "-shm").delete();
+                runOnUiThread(() -> {
+                    viewModel.reloadHistory();
+                    Toast.makeText(this, "History imported.", Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() ->
+                        Toast.makeText(this, "Import failed: " + e.getMessage(),
+                                Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    private void doConfigImport(Uri uri) {
+        new Thread(() -> {
+            try {
+                InputStream is = getContentResolver().openInputStream(uri);
+                String json = readStream(is);
+                is.close();
+                JSONObject root = new JSONObject(json);
+
+                if (root.has("remap")) {
+                    RemapConfig cfg = RemapConfig.fromJson(root.getJSONObject("remap"));
+                    cfg.save(remapPrefs);
+                }
+
+                if (root.has("theme")) {
+                    remapPrefs.edit().putString("theme_mode", root.getString("theme")).apply();
+                }
+
+                if (root.has("vars")) {
+                    JSONObject vars = root.getJSONObject("vars");
+                    SharedPreferences.Editor ed =
+                            getSharedPreferences("calculator_vars", MODE_PRIVATE).edit();
+                    Iterator<String> keys = vars.keys();
+                    while (keys.hasNext()) {
+                        String k = keys.next();
+                        ed.putFloat(k, (float) vars.getDouble(k));
+                    }
+                    ed.apply();
+                }
+
+                if (root.has("customVars")) {
+                    JSONObject custom = root.getJSONObject("customVars");
+                    SharedPreferences.Editor ed =
+                            getSharedPreferences("ic_custom_vars", MODE_PRIVATE).edit().clear();
+                    Iterator<String> keys = custom.keys();
+                    while (keys.hasNext()) {
+                        String k = keys.next();
+                        ed.putFloat(k, (float) custom.getDouble(k));
+                    }
+                    ed.apply();
+                }
+
+                runOnUiThread(() -> recreate());
+            } catch (Exception e) {
+                runOnUiThread(() ->
+                        Toast.makeText(this, "Import failed: " + e.getMessage(),
+                                Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    private static void copyStream(InputStream in, OutputStream out) throws java.io.IOException {
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+    }
+
+    private static String readStream(InputStream in) throws java.io.IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) != -1) baos.write(buf, 0, n);
+        return baos.toString("UTF-8");
     }
 
     static void applyThemeMode(String mode) {

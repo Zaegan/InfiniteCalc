@@ -166,7 +166,7 @@ public class RemapConfig {
         return root;
     }
 
-    private static RemapConfig fromJson(JSONObject root) throws JSONException {
+    static RemapConfig fromJson(JSONObject root) throws JSONException {
         JSONArray bArr = root.getJSONArray("basicRows");
         List<List<ButtonDef>> basic = new ArrayList<>();
         for (int i = 0; i < bArr.length(); i++) basic.add(rowFromJson(bArr.getJSONArray(i)));

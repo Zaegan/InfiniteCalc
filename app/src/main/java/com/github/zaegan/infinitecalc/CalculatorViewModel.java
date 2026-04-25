@@ -461,6 +461,12 @@ public class CalculatorViewModel extends AndroidViewModel {
 
     // ── Persistence ─────────────────────────────────────────────────────────
 
+    public void reloadHistory() {
+        rawGroups.clear();
+        history.setValue(new ArrayList<>());
+        loadHistoryFromDb();
+    }
+
     private void loadHistoryFromDb() {
         dbExecutor.execute(() -> {
             List<HistoryGroup> groups =
