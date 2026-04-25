@@ -85,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         // Apply saved theme before super so the window gets the right background
         String themeMode = getSharedPreferences("remap_prefs", MODE_PRIVATE)
-                .getString("theme_mode", "dark");
+                .getString("theme_mode", "system");
         applyThemeMode(themeMode);
 
         super.onCreate(savedInstanceState);
