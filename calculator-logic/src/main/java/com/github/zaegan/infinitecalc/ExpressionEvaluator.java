@@ -110,6 +110,9 @@ public class ExpressionEvaluator {
                     num.append(expr.charAt(i++));
                 }
                 // Scientific notation: consume e[+/-]digits as part of the number
+                // (e.g. 1.5e10, 1.5e-5) — only when 'e' is immediately followed by
+                // an optional sign and then at least one digit, to avoid consuming
+                // the Euler constant 'e' used as a standalone value.
                 if (i < expr.length() && (expr.charAt(i) == 'e' || expr.charAt(i) == 'E')) {
                     int j = i + 1;
                     if (j < expr.length() && (expr.charAt(j) == '+' || expr.charAt(j) == '-')) j++;
@@ -374,7 +377,6 @@ public class ExpressionEvaluator {
                     double x = args[0], y = args[1];
                     switch (fn) {
                         case FUNC_NTHRT: {
-                            // nthrt(n, x): real n-th root of x
                             if (x == 0) throw new Exception("nthrt: degree cannot be zero");
                             if (y < 0) {
                                 long ni = (long) x;
@@ -447,12 +449,12 @@ public class ExpressionEvaluator {
 
     /** C(n, r) = n! / (r! * (n-r)!), computed iteratively to avoid large intermediates. */
     private static double combinations(int n, int r) {
-        if (r > n - r) r = n - r; // take the smaller side
+        if (r > n - r) r = n - r;
         double result = 1;
         for (int k = 0; k < r; k++) {
             result = result * (n - k) / (k + 1);
         }
-        return Math.round(result); // snap to integer (avoids 9.999... rounding errors)
+        return Math.round(result);
     }
 
     // ── Token model ───────────────────────────────────────────────────────

@@ -479,8 +479,13 @@ public class MxEvaluatorTest {
     // ── Mode-comparison: same expression, different modes ─────────────────────
 
     @Test public void standardModeNegDigitBeforePow() throws Exception {
-        // Standard: -9^2 = -(9^2) = -81
-        assertEquals(-81.0, eval("-9^2"), 1e-10);
+        // Standard: −9^2 = -(9^2) = -81  (U+2212, the UI minus)
+        assertEquals(-81.0, eval("\u22129^2"), 1e-10);
+    }
+
+    @Test public void standardModeNegTwoSquared() throws Exception {
+        // The originally reported bug: −2^2 must equal -4, not 4
+        assertEquals(-4.0, eval("\u22122^2"), 1e-10);
     }
 
     @Test public void negFirstModeNegDigitBeforePow() throws Exception {
@@ -489,8 +494,8 @@ public class MxEvaluatorTest {
     }
 
     @Test public void standardModeNegParenBeforePow() throws Exception {
-        // Standard: -(5+3)^2 = -(64) = -64
-        assertEquals(-64.0, eval("-(5+3)^2"), 1e-10);
+        // Standard: −(5+3)^2 = -(64) = -64  (U+2212, the UI minus)
+        assertEquals(-64.0, eval("\u2212(5+3)^2"), 1e-10);
     }
 
     @Test public void negFirstModeNegParenBeforePow() throws Exception {
@@ -499,19 +504,19 @@ public class MxEvaluatorTest {
     }
 
     @Test public void negDigitInsideExprBothModes() throws Exception {
-        // -9^2 inside a larger expression — only value of the digit changes
-        assertEquals(-81.0 + 1.0, eval("-9^2+1"), 1e-10);      // standard: -80
-        assertEquals(81.0 + 1.0,  evalNegFirst("-9^2+1"), 1e-10); // negFirst: 82
+        // −9^2 inside a larger expression — UI minus (U+2212) in standard mode
+        assertEquals(-81.0 + 1.0, eval("\u22129^2+1"), 1e-10);      // standard: -80
+        assertEquals(81.0 + 1.0,  evalNegFirst("-9^2+1"), 1e-10);   // negFirst (ASCII ok): 82
     }
 
     @Test public void negParenInsideExprBothModes() throws Exception {
-        assertEquals(-64.0 + 1.0, eval("-(5+3)^2+1"), 1e-10);      // standard: -63
-        assertEquals(64.0 + 1.0,  evalNegFirst("-(5+3)^2+1"), 1e-10); // negFirst: 65
+        assertEquals(-64.0 + 1.0, eval("\u2212(5+3)^2+1"), 1e-10);      // standard: -63
+        assertEquals(64.0 + 1.0,  evalNegFirst("-(5+3)^2+1"), 1e-10);   // negFirst (ASCII ok): 65
     }
 
     @Test public void standardModeFuncNegBeforePow() throws Exception {
-        // Standard: -sin(π/2)^2 = -(sin(π/2)^2) = -(1) = -1
-        assertEquals(-1.0, eval("-sin(pi/2)^2"), 1e-10);
+        // Standard: −sin(π/2)^2 = -(sin(π/2)^2) = -(1) = -1  (U+2212, the UI minus)
+        assertEquals(-1.0, eval("\u2212sin(pi/2)^2"), 1e-10);
     }
 
     @Test public void negFirstModeFuncNegBeforePow() throws Exception {

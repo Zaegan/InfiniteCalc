@@ -110,6 +110,11 @@ public class MxEvaluator {
     static String preprocess(String raw) {
         if (raw == null) return "";
         String s = raw;
+        // Standard mode: normalize −X^Y → −(X^Y) before ASCII conversion so that
+        // mXparser (which binds unary minus tighter than ^) gives the standard result
+        // -(X^Y) rather than (-X)^Y. Must happen on the UI string (U+2212) before
+        // the minus is collapsed to ASCII.
+        if (!negationFirstMode) s = normalizeToNegFirst(s);
         // Unicode operators → ASCII
         s = s.replace('\u2212', '-').replace('\u00D7', '*').replace('\u00F7', '/');
         // Casio-style unary preprocessing — only in negation-first mode
@@ -203,14 +208,12 @@ public class MxEvaluator {
         String pass2 = sb2.toString();
 
         // Pass 3: wrap -funcname(expr) → (-funcname(expr)) when followed by ^
-        // Catches cases like -sin(x)^2 → (-sin(x))^2.
         StringBuilder sb3 = new StringBuilder(pass2.length());
         i = 0;
         while (i < pass2.length()) {
             char c = pass2.charAt(i);
             if (c == '-' && isCasioUnaryPos(pass2, i) && i + 1 < pass2.length()
                     && pass2.charAt(i + 1) >= 'a' && pass2.charAt(i + 1) <= 'z') {
-                // Scan function name (lowercase letters and digits)
                 int j = i + 1;
                 while (j < pass2.length()
                         && (Character.isLetterOrDigit(pass2.charAt(j))
@@ -221,11 +224,10 @@ public class MxEvaluator {
                     int groupClose = findMatchingClose(pass2, j);
                     if (groupClose > 0 && groupClose + 1 < pass2.length()
                             && pass2.charAt(groupClose + 1) == '^') {
-                        // -funcname(...)^... → (-funcname(...))^...
                         sb3.append("(-");
                         sb3.append(pass2, i + 1, groupClose + 1); // funcname(...)
                         sb3.append(")");
-                        i = groupClose + 1; // next char will be '^'
+                        i = groupClose + 1;
                         continue;
                     }
                 }
@@ -297,7 +299,6 @@ public class MxEvaluator {
                     }
                 } else if (i + 1 < expr.length()
                         && expr.charAt(i + 1) >= 'a' && expr.charAt(i + 1) <= 'z') {
-                    // Function call: −funcname(...)^CHAIN → −(funcname(...)^CHAIN)
                     int j = i + 1;
                     while (j < expr.length()
                             && (Character.isLetterOrDigit(expr.charAt(j))
@@ -309,6 +310,7 @@ public class MxEvaluator {
                         if (groupClose > 0 && groupClose + 1 < expr.length()
                                 && expr.charAt(groupClose + 1) == '^') {
                             int expEnd = findExponentChainEnd(expr, groupClose + 2);
+                            // −funcname(...)^CHAIN → −(funcname(...)^CHAIN)
                             sb.append('\u2212').append('(');
                             sb.append(expr, i + 1, groupClose + 1); // funcname(...)
                             sb.append('^');
@@ -373,7 +375,6 @@ public class MxEvaluator {
                     }
                 } else if (i + 1 < expr.length()
                         && expr.charAt(i + 1) >= 'a' && expr.charAt(i + 1) <= 'z') {
-                    // Function call: −funcname(...)^... → (−funcname(...))^...
                     int j = i + 1;
                     while (j < expr.length()
                             && (Character.isLetterOrDigit(expr.charAt(j))
@@ -384,6 +385,7 @@ public class MxEvaluator {
                         int groupClose = findMatchingClose(expr, j);
                         if (groupClose > 0 && groupClose + 1 < expr.length()
                                 && expr.charAt(groupClose + 1) == '^') {
+                            // −funcname(...)^... → (−funcname(...))^...
                             sb.append('(').append('\u2212');
                             sb.append(expr, i + 1, groupClose + 1); // funcname(...)
                             sb.append(')');

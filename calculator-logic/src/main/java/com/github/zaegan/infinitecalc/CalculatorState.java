@@ -64,12 +64,14 @@ public class CalculatorState {
         if (cursor > 0) {
             char prev = expr.charAt(cursor - 1);
             boolean prevIsValue = Character.isDigit(prev) || prev == ')'
-                    || prev == 'π' || (prev >= 'A' && prev <= 'Z')
-                    || prev == '\u03B1' || prev == '\u03B2';
+                    || prev == 'π' || prev == 'e'
+                    || (prev >= 'A' && prev <= 'Z')
+                    || prev == '\u03B1' || prev == '\u03B2'
+                    || prev == '\u2099' || prev == '\u2091' || prev == '\u2090'; // subscript constant endings
             boolean textOpensGroup = text.startsWith("sin(") || text.startsWith("cos(")
                     || text.startsWith("tan(") || text.startsWith("ln(")
                     || text.startsWith("log(") || text.startsWith("sqrt(")
-                    || text.startsWith("√(")
+                    || text.startsWith("√(") || text.startsWith("\u221B(")
                     || text.startsWith("asin(") || text.startsWith("acos(") || text.startsWith("atan(")
                     || text.startsWith("sinh(") || text.startsWith("cosh(") || text.startsWith("tanh(")
                     || text.startsWith("exp(") || text.startsWith("cbrt(") || text.startsWith("nthrt(")
@@ -77,7 +79,9 @@ public class CalculatorState {
                     || text.startsWith("floor(") || text.startsWith("ceil(")
                     || text.startsWith("log2(") || text.startsWith("logn(")
                     || text.startsWith("mod(") || text.startsWith("ncr(") || text.startsWith("npr(")
+                    || text.startsWith("10^(")
                     || text.equals("π") || text.equals("e")
+                    || text.equals("G\u2099") || text.equals("k\u2091") || text.equals("N\u2090")
                     || (text.length() == 1 && (
                             (text.charAt(0) >= 'A' && text.charAt(0) <= 'Z')
                             || text.charAt(0) == '\u03B1' || text.charAt(0) == '\u03B2'));
@@ -96,19 +100,49 @@ public class CalculatorState {
      */
     public void backspace() {
         if (cursor == 0) return;
+        // Canonical built-in tokens deleted as a single unit.
+        // Keep in sync with the multi-char insert texts in RemapConfig.makeDefault().
+        // User-defined custom button text is intentionally NOT listed here — it
+        // deletes character by character, which is the naive/expected behaviour.
         String[] multiTokens = {
             "asin(", "acos(", "atan(",
             "sinh(", "cosh(", "tanh(",
             "nthrt(", "round(", "floor(", "ceil(",
             "sqrt(", "cbrt(", "logn(", "log2(", "log(", "ln(",
             "ncr(", "npr(", "mod(",
-            "exp(", "abs(", "sin(", "cos(", "tan(", "√("
+            "exp(", "abs(", "sin(", "cos(", "tan(", "√(", "\u221B(",
+            "10^(", "^2", "^3",
+            "G\u2099", "k\u2091", "N\u2090"
         };
-        String before = expr.substring(0, cursor);
+        String s      = expr.toString();
+        String before = s.substring(0, cursor);
+        String after  = s.substring(cursor);
+
         for (String token : multiTokens) {
+            // Case 1: complete token sits immediately before the cursor.
             if (before.endsWith(token)) {
                 expr.delete(cursor - token.length(), cursor);
                 cursor -= token.length();
+                return;
+            }
+            // Case 2: cursor is inside the token, or between the name and its
+            // opening '(' — try every split position within the token.
+            // Closed ')' is deliberately excluded: tokens never contain ')'.
+            for (int k = 1; k < token.length(); k++) {
+                String prefix = token.substring(0, k);
+                String suffix = token.substring(k);
+                if (!before.endsWith(prefix) || !after.startsWith(suffix)) continue;
+
+                int prefixStart = cursor - k;
+                // For letter-starting tokens require a non-letter character
+                // immediately before the match so we don't fire inside an
+                // unrelated longer name (e.g. "log" inside "colog2(").
+                if (Character.isLetter(token.charAt(0))
+                        && prefixStart > 0
+                        && Character.isLetter(s.charAt(prefixStart - 1))) continue;
+
+                expr.delete(prefixStart, cursor + suffix.length());
+                cursor = prefixStart;
                 return;
             }
         }
@@ -138,7 +172,8 @@ public class CalculatorState {
                 && (Character.isDigit(prev) || prev == ')'
                     || prev == 'π' || prev == 'e'
                     || (prev >= 'A' && prev <= 'Z')
-                    || prev == '\u03B1' || prev == '\u03B2');
+                    || prev == '\u03B1' || prev == '\u03B2'
+                    || prev == '\u2099' || prev == '\u2091' || prev == '\u2090');
 
         if (prevIsValue) {
             if (depth > 0) {
@@ -155,35 +190,86 @@ public class CalculatorState {
     }
 
     /**
-     * Smart negation: find the number at/around the cursor and toggle its sign.
+     * Smart negation — delegates to {@link #smartNegate(boolean)} with {@code false}.
      */
     public void smartNegate() {
-        String s = expr.toString();
-        int len = s.length();
+        smartNegate(false);
+    }
 
+    /**
+     * Smart negation — toggles a {@code −} (U+2212) prefix before the nearest
+     * number token in both standard and negation-first mode.
+     *
+     * <p>In standard mode, {@code preprocess()} calls {@code normalizeToNegFirst()}
+     * before evaluation, so a bare {@code −X^Y} is rewritten to {@code −(X^Y)} and
+     * evaluated as {@code -(X^Y)}.  No {@code (−} wrapping is needed here.
+     *
+     * <p>Does nothing if no digit, {@code (}, or letter token is found near the cursor.
+     */
+    public void smartNegate(boolean negationFirstMode) {
+        String s = expr.toString();
+        int tokenStart = findNegationTokenStart(s, cursor);
+        if (tokenStart < 0) return; // nothing to negate
+
+        // Toggle U+2212 before the token — same logic for both modes.
+        if (tokenStart > 0 && s.charAt(tokenStart - 1) == '\u2212'
+                && isUnaryAt(s, tokenStart - 1)) {
+            expr.deleteCharAt(tokenStart - 1);
+            if (cursor > tokenStart - 1) cursor--;
+        } else {
+            expr.insert(tokenStart, '\u2212');
+            if (cursor >= tokenStart) cursor++;
+        }
+    }
+
+    /**
+     * Insert {@code (−} at the cursor (standard-mode negation from the minus button).
+     * Toggles: if {@code (−} is already immediately before the cursor, removes it.
+     */
+    public void insertStandardNegation() {
+        String s = expr.toString();
+        if (cursor >= 2 && s.charAt(cursor - 2) == '('
+                && s.charAt(cursor - 1) == '\u2212') {
+            expr.delete(cursor - 2, cursor);
+            cursor -= 2;
+        } else {
+            expr.insert(cursor, "(\u2212");
+            cursor += 2;
+        }
+    }
+
+    /**
+     * Find the position where a negation prefix should be inserted.
+     * <ul>
+     *   <li>If a digit run ends at (or starts at) the cursor: returns its start.</li>
+     *   <li>If the character at the cursor is {@code (} or a letter: returns the cursor.</li>
+     *   <li>Otherwise: returns {@code -1} (no meaningful token found).</li>
+     * </ul>
+     */
+    private static int findNegationTokenStart(String s, int cursor) {
+        // Scan back for digit run ending at cursor
         int numStart = cursor;
-        while (numStart > 0 && (Character.isDigit(s.charAt(numStart - 1))
-                || s.charAt(numStart - 1) == '.')) {
+        while (numStart > 0
+                && (Character.isDigit(s.charAt(numStart - 1))
+                    || s.charAt(numStart - 1) == '.')) {
             numStart--;
         }
+        if (numStart < cursor) return numStart;
 
-        if (numStart == cursor) {
-            int fwd = cursor;
-            while (fwd < len && (Character.isDigit(s.charAt(fwd)) || s.charAt(fwd) == '.')) {
-                fwd++;
-            }
-            if (fwd == cursor) return;
-            numStart = cursor;
+        // Digit run starting at cursor
+        int len = s.length();
+        if (cursor < len
+                && (Character.isDigit(s.charAt(cursor)) || s.charAt(cursor) == '.')) {
+            return cursor;
         }
 
-        if (numStart > 0 && s.charAt(numStart - 1) == '\u2212'
-                && isUnaryAt(s, numStart - 1)) {
-            expr.deleteCharAt(numStart - 1);
-            if (cursor > numStart - 1) cursor--;
-        } else {
-            expr.insert(numStart, '\u2212');
-            cursor++;
+        // '(' or letter directly ahead
+        if (cursor < len
+                && (s.charAt(cursor) == '(' || Character.isLetter(s.charAt(cursor)))) {
+            return cursor;
         }
+
+        return -1; // nothing to negate
     }
 
     // ── Operator helpers ────────────────────────────────────────────────────
