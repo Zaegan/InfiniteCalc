@@ -28,7 +28,7 @@ public class TimeParserTest {
     @Test public void testTrailingColon_oneHour()    { eq("1:00",  "1:"); }
     @Test public void testTrailingColon_zeroHours()  { eq("0:00",  "0:"); }
     @Test public void testTrailingColon_twoDigitH()  { eq("12:00", "12:"); }
-    @Test public void testTrailingColon_largeHour()  { eq("100:00", "100:"); }
+    @Test public void testTrailingColon_largeHour()  { eq("4:00 +4d", "100:"); }  // 100h = 4d + 4h
 
     // ── H:MM ──────────────────────────────────────────────────────────────────
 
