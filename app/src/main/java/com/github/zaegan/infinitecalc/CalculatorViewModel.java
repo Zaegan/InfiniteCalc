@@ -205,6 +205,26 @@ public class CalculatorViewModel extends AndroidViewModel {
         String expression = state.getExpression().trim();
         if (expression.isEmpty()) return;
 
+        // Time expressions: evaluate via parallel parser, no iteration support
+        if (TimeParser.isTimeExpression(expression)) {
+            try {
+                String resultStr = TimeParser.evaluate(expression);
+                addDraftStep(expression, resultStr);
+                if (currentDraftSteps.isEmpty()) {
+                    currentDraftSteps.add(new HistoryItem(expression, resultStr));
+                }
+                commitGroup();
+                resetIterationState();
+                lastActionWasEquals = true;
+                state.setExpression(resultStr);
+                previewText.setValue("");
+                updateDisplay();
+            } catch (Exception e) {
+                errorMessage.setValue(e.getMessage() != null ? e.getMessage() : "Error");
+            }
+            return;
+        }
+
         if (lastActionWasEquals && iterationTemplate != null) {
             // ── Iteration: reconstruct expression from current result + template ──
             String currentResult = expression; // state holds the result from last =
@@ -382,7 +402,7 @@ public class CalculatorViewModel extends AndroidViewModel {
         for (int i = 0; i < expr.length(); i++) {
             char c = expr.charAt(i);
             if (c == '+' || c == '\u2212' || c == '\u00D7' || c == '\u00F7'
-                    || c == '^' || c == '%' || c == '(') return true;
+                    || c == '^' || c == '%' || c == '(' || c == ':') return true;
         }
         return false;
     }
@@ -399,6 +419,19 @@ public class CalculatorViewModel extends AndroidViewModel {
             previewText.setValue("");
             return;
         }
+
+        // Route time expressions to the parallel time parser
+        if (TimeParser.isTimeExpression(expression)) {
+            try {
+                String resultStr = TimeParser.evaluate(expression);
+                previewText.setValue("= " + resultStr);
+                addDraftStep(expression, resultStr);
+            } catch (Exception e) {
+                previewText.setValue("");
+            }
+            return;
+        }
+
         try {
             Map<String, Double> vars = loadVariables();
             double partialResult = MxEvaluator.evaluatePartial(expression, vars, useRadians);
