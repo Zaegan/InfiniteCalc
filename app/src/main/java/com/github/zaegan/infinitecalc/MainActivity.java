@@ -28,6 +28,7 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.ContextCompat;
@@ -91,7 +92,7 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String[]> historyImportLauncher =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                 if (uri == null) return;
-                new AlertDialog.Builder(this)
+                new MaterialAlertDialogBuilder(this)
                         .setTitle("Replace history?")
                         .setMessage("This will permanently replace your current history.")
                         .setPositiveButton("Replace", (d, w) -> doHistoryImport(uri))
@@ -465,7 +466,7 @@ public class MainActivity extends AppCompatActivity {
     private void showTutorial(String id, Runnable onDone) {
         TutorialContent.Entry entry = TutorialContent.get(id);
         if (entry == null) { if (onDone != null) onDone.run(); return; }
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle(entry.title)
                 .setMessage(entry.body)
                 .setPositiveButton("Got it", (d, w) -> { if (onDone != null) onDone.run(); })
@@ -493,7 +494,7 @@ public class MainActivity extends AppCompatActivity {
         tutorialManager.markSeen(INTRO_IDS[currentIndex]);
         TutorialContent.Entry entry = TutorialContent.get(INTRO_IDS[currentIndex]);
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this)
                 .setTitle(entry.title)
                 .setMessage(entry.body)
                 .setCancelable(false)

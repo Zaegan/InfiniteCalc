@@ -1,5 +1,6 @@
 {
     "type": "android-native",
+    "app_name": "InfiniteCalc",
     "compile_sdk": 36,
     "target_sdk": 36,
     "min_sdk": 21,

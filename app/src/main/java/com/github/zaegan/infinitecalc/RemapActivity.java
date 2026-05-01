@@ -19,6 +19,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.ArrayList;
@@ -237,7 +238,7 @@ public class RemapActivity extends AppCompatActivity {
             if (!tutorialManager.isSeen(TutorialManager.ADD_BUTTON)) {
                 tutorialManager.markSeen(TutorialManager.ADD_BUTTON);
                 TutorialContent.Entry entry = TutorialContent.get(TutorialManager.ADD_BUTTON);
-                new AlertDialog.Builder(this)
+                new MaterialAlertDialogBuilder(this)
                         .setTitle(entry.title)
                         .setMessage(entry.body)
                         .setPositiveButton("Got it", (d, w) -> showCreateButtonDialog())
@@ -477,7 +478,7 @@ public class RemapActivity extends AppCompatActivity {
             btnModeInsert.setTextColor(offTxt);
         });
 
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("New Custom Button")
                 .setView(layout)
                 .setPositiveButton("Create", (dialog, which) -> {
