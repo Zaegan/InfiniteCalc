@@ -278,8 +278,8 @@ public class RemapActivity extends AppCompatActivity {
         btn.setAllCaps(false);
         btn.setTextSize(13f);
         btn.setText(def.labelText);
-        btn.setTextColor(def.textColor());
-        btn.setBackgroundTintList(ColorStateList.valueOf(def.bgColor()));
+        btn.setTextColor(def.textColor(this));
+        btn.setBackgroundTintList(ColorStateList.valueOf(def.bgColor(this)));
         LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, dp(52));
         btn.setLayoutParams(btnLp);
@@ -676,7 +676,7 @@ public class RemapActivity extends AppCompatActivity {
     // ── Draggable button factory ──────────────────────────────────────────────
 
     private Button makeDraggableButton(ButtonDef def, String rowKey, int slotIdx, float weight) {
-        Button btn = makeButton(def.labelText, def.textColor(), def.bgColor(), weight, 52);
+        Button btn = makeButton(def.labelText, def.textColor(this), def.bgColor(this), weight, 52);
         // Drag tag encodes full source location: rowKey + ":" + slotIdx
         String dragTag = rowKey + ":" + slotIdx;
 

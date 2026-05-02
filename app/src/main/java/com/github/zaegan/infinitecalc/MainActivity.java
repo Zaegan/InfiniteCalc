@@ -348,8 +348,8 @@ public class MainActivity extends AppCompatActivity {
             btn.setAllCaps(false);
             btn.setTextSize(13f);
             btn.setText(displayLabelFor(def));
-            btn.setTextColor(def.textColor());
-            btn.setBackgroundTintList(ColorStateList.valueOf(def.bgColor()));
+            btn.setTextColor(def.textColor(this));
+            btn.setBackgroundTintList(ColorStateList.valueOf(def.bgColor(this)));
 
             float weight = (n == 3 && i == 0) ? 2f : 1f;
             LinearLayout.LayoutParams lp =

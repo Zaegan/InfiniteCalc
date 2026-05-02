@@ -94,4 +94,20 @@
     <color name="remap_drop_label">#999999</color>
     <color name="remap_drop_hover_border">#00aa40</color>
     <color name="remap_drop_hover_label">#00aa40</color>
+
+    <!-- Programmatic button categories (remappable rows) -->
+    <color name="btn_cat_util_bg">#e0ffe0</color>
+    <color name="btn_cat_util_text">#006600</color>
+    <color name="btn_cat_nav_bg">#e0fff8</color>
+    <color name="btn_cat_nav_text">#006050</color>
+    <color name="btn_cat_set_bg">#fff0d0</color>
+    <color name="btn_cat_set_text">#804000</color>
+    <color name="btn_cat_const_bg">#fffde0</color>
+    <color name="btn_cat_const_text">#806000</color>
+    <color name="btn_cat_digit_bg">#f0f0f0</color>
+    <color name="btn_cat_digit_text">#222222</color>
+    <color name="btn_cat_op_bg">#e0f0ff</color>
+    <color name="btn_cat_op_text">#003070</color>
+    <color name="btn_cat_func_bg">#f0e8ff</color>
+    <color name="btn_cat_func_text">#400060</color>
 </resources>

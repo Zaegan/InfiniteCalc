@@ -1,5 +1,7 @@
 package com.github.zaegan.infinitecalc;
 
+import android.content.Context;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -68,48 +70,48 @@ public class ButtonDef {
 
     // ── Styling helpers ───────────────────────────────────────────────────────
 
-    /** Background tint colour for this button, determined by content category. */
-    public int bgColor() {
+    /** Background tint colour for this button, resolved from day/night color resources. */
+    public int bgColor(Context ctx) {
         switch (getActionType()) {
             case SETTINGS:
-            case REMAP:        return 0xFF0A2A0A;
+            case REMAP:        return ctx.getColor(R.color.btn_cat_util_bg);
             case SMART_PAREN:
             case RAD_DEG:
-            case NEGATE:       return 0xFF003A38;
+            case NEGATE:       return ctx.getColor(R.color.btn_cat_nav_bg);
             default: break;
         }
         // MINUS and CUSTOM
-        if (isSetCommand())    return 0xFF2A1500;  // SET variable — amber
+        if (isSetCommand())    return ctx.getColor(R.color.btn_cat_set_bg);
         switch (insertText) {
             case "π": case "e":
             case "G\u2099": case "k\u2091": case "N\u2090":
-                               return 0xFF2A1E00;
+                               return ctx.getColor(R.color.btn_cat_const_bg);
         }
-        if (isDigitOrDot())    return 0xFF2C2C2C;
-        if (isOperator())      return 0xFF0E2840;
-                               return 0xFF22103A;  // function / other
+        if (isDigitOrDot())    return ctx.getColor(R.color.btn_cat_digit_bg);
+        if (isOperator())      return ctx.getColor(R.color.btn_cat_op_bg);
+                               return ctx.getColor(R.color.btn_cat_func_bg);
     }
 
-    /** Text colour for this button. */
-    public int textColor() {
+    /** Text colour for this button, resolved from day/night color resources. */
+    public int textColor(Context ctx) {
         switch (getActionType()) {
             case SETTINGS:
-            case REMAP:        return 0xFFAAFFAA;
+            case REMAP:        return ctx.getColor(R.color.btn_cat_util_text);
             case SMART_PAREN:
             case RAD_DEG:
-            case NEGATE:       return 0xFF60FFEE;
+            case NEGATE:       return ctx.getColor(R.color.btn_cat_nav_text);
             default: break;
         }
         // MINUS and CUSTOM
-        if (isSetCommand())    return 0xFFFFAA40;  // SET variable — amber
+        if (isSetCommand())    return ctx.getColor(R.color.btn_cat_set_text);
         switch (insertText) {
             case "π": case "e":
             case "G\u2099": case "k\u2091": case "N\u2090":
-                               return 0xFFFFD080;
+                               return ctx.getColor(R.color.btn_cat_const_text);
         }
-        if (isDigitOrDot())    return 0xFFFFFFFF;
-        if (isOperator())      return 0xFF80C8FF;
-                               return 0xFFD0A0FF;  // function / other
+        if (isDigitOrDot())    return ctx.getColor(R.color.btn_cat_digit_text);
+        if (isOperator())      return ctx.getColor(R.color.btn_cat_op_text);
+                               return ctx.getColor(R.color.btn_cat_func_text);
     }
 
     /** True if this button encodes a SET-variable command. */
