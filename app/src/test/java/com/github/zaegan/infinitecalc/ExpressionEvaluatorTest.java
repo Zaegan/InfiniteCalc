@@ -107,6 +107,15 @@ public class ExpressionEvaluatorTest {
         assertEquals(3.0, eval("1.5+1.5"), 1e-10);
     }
 
+    @Test public void trailingDecimalPoint() throws Exception {
+        // "308." should parse as 308, not throw
+        assertEquals(385.3, eval("308.+77.3"), 1e-10);
+    }
+
+    @Test public void trailingDecimalPointAlone() throws Exception {
+        assertEquals(308.0, eval("308."), 1e-10);
+    }
+
     // ── Constants ────────────────────────────────────────────────────────────
 
     @Test public void piConstant() throws Exception {

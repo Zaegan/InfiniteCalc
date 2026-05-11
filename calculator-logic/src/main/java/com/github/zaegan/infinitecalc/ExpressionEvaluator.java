@@ -127,7 +127,9 @@ public class ExpressionEvaluator {
                     }
                 }
                 try {
-                    tokens.add(new Token(TokenType.NUMBER, Double.parseDouble(num.toString())));
+                    String numStr = num.toString();
+                    if (numStr.endsWith(".")) numStr = numStr.substring(0, numStr.length() - 1);
+                    tokens.add(new Token(TokenType.NUMBER, Double.parseDouble(numStr)));
                 } catch (NumberFormatException e) {
                     throw new Exception("Invalid number: " + num);
                 }
