@@ -80,7 +80,7 @@
     <color name="remap_set_on_bg">#fff8e0</color>
 
     <!-- Remap: mode button off -->
-    <color name="remap_mode_off_text">#999999</color>
+    <color name="remap_mode_off_text">#5e5e5e</color>
     <color name="remap_mode_off_bg">#e0e0e0</color>
 
     <!-- Remap: input fields -->
