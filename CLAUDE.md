@@ -10,6 +10,9 @@ If any tests fail, fix them before building. Do not submit a build with failing 
 
 ## Building
 
+The build server pulls from GitHub — commit and push before triggering a build.
+
+    git push origin main
     ~/bin/buildserver.sh build InfiniteCalc
 
 Add `--clean` when `build.json` dependencies change or the scaffold looks corrupt.
