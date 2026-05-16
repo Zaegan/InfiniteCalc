@@ -120,7 +120,7 @@ public class RemapConfig {
         ext.add(page(
             row(def("REMAP","Remap"),
                 def("G\u2099","Gₙ"), def("k\u2091","kₑ"), def("N\u2090","Nₐ")),
-            row()));   // empty row2Middle
+            row(def(":",":"))));
 
         return new RemapConfig(basic, ext, new ArrayList<>());
     }

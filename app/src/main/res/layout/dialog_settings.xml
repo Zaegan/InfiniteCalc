@@ -76,23 +76,31 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:paddingBottom="6dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Calculation History"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp" />
 
         <Button
             android:id="@+id/btn_export_history"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="40dp"
-            android:layout_weight="1"
-            android:layout_marginEnd="4dp"
-            android:text="Export History"
+            android:layout_marginStart="4dp"
+            android:text="Export"
             android:textSize="12sp" />
 
         <Button
             android:id="@+id/btn_import_history"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="40dp"
-            android:layout_weight="1"
-            android:text="Import History"
+            android:layout_marginStart="4dp"
+            android:text="Import"
             android:textSize="12sp" />
 
     </LinearLayout>
@@ -101,23 +109,31 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:paddingBottom="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Layout &amp; Variables"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp" />
 
         <Button
             android:id="@+id/btn_export_config"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="40dp"
-            android:layout_weight="1"
-            android:layout_marginEnd="4dp"
-            android:text="Export Config"
+            android:layout_marginStart="4dp"
+            android:text="Export"
             android:textSize="12sp" />
 
         <Button
             android:id="@+id/btn_import_config"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="40dp"
-            android:layout_weight="1"
-            android:text="Import Config"
+            android:layout_marginStart="4dp"
+            android:text="Import"
             android:textSize="12sp" />
 
     </LinearLayout>
