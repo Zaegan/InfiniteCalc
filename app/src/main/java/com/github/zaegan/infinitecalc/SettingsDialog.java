@@ -2,9 +2,7 @@ package com.github.zaegan.infinitecalc;
 
 import android.app.Dialog;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -16,7 +14,6 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
 import androidx.fragment.app.DialogFragment;
 import androidx.lifecycle.ViewModelProvider;
 
@@ -24,8 +21,9 @@ import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
+import java.io.FileInputStream;
 import java.util.Map;
 
 public class SettingsDialog extends DialogFragment {
@@ -101,27 +99,28 @@ public class SettingsDialog extends DialogFragment {
         Context ctx = requireContext();
         new Thread(() -> {
             try {
-                // Flush WAL so the main db file is complete
                 HistoryDatabase.getInstance(ctx)
                         .getReadableDatabase()
                         .rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null)
                         .close();
 
                 File src = ctx.getDatabasePath("calc_history.db");
-                File dst = new File(ctx.getCacheDir(), "infinitecalc_history.db");
-                copyFile(src, dst);
+                byte[] data;
+                try (FileInputStream in = new FileInputStream(src);
+                     ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) != -1) baos.write(buf, 0, n);
+                    data = baos.toByteArray();
+                }
 
-                Uri uri = FileProvider.getUriForFile(
-                        ctx, ctx.getPackageName() + ".fileprovider", dst);
-
-                Intent intent = new Intent(Intent.ACTION_SEND);
-                intent.setType("application/octet-stream");
-                intent.putExtra(Intent.EXTRA_STREAM, uri);
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                writeToDownloads(ctx, "infinitecalc_history.db", data, "application/octet-stream");
 
                 if (isAdded()) {
                     requireActivity().runOnUiThread(() ->
-                            startActivity(Intent.createChooser(intent, "Export History")));
+                            Toast.makeText(ctx,
+                                    "Saved to Downloads as \"infinitecalc_history.db\"",
+                                    Toast.LENGTH_LONG).show());
                 }
             } catch (Exception e) {
                 if (isAdded()) {
@@ -165,19 +164,12 @@ public class SettingsDialog extends DialogFragment {
             }
             root.put("customVars", customVarsJson);
 
-            File outFile = new File(ctx.getCacheDir(), "infinitecalc_config.json");
-            try (FileOutputStream fos = new FileOutputStream(outFile)) {
-                fos.write(root.toString(2).getBytes("UTF-8"));
-            }
+            byte[] data = root.toString(2).getBytes("UTF-8");
+            writeToDownloads(ctx, "infinitecalc_config.json", data, "application/json");
 
-            Uri uri = FileProvider.getUriForFile(
-                    ctx, ctx.getPackageName() + ".fileprovider", outFile);
-
-            Intent intent = new Intent(Intent.ACTION_SEND);
-            intent.setType("application/json");
-            intent.putExtra(Intent.EXTRA_STREAM, uri);
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(intent, "Export Config"));
+            Toast.makeText(ctx,
+                    "Saved to Downloads as \"infinitecalc_config.json\"",
+                    Toast.LENGTH_LONG).show();
 
         } catch (Exception e) {
             Toast.makeText(ctx, "Export failed: " + e.getMessage(),
@@ -185,16 +177,45 @@ public class SettingsDialog extends DialogFragment {
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Downloads helper ──────────────────────────────────────────────────────
 
-    private static void copyFile(File src, File dst) throws java.io.IOException {
-        try (java.io.FileInputStream in  = new java.io.FileInputStream(src);
-             java.io.FileOutputStream out = new java.io.FileOutputStream(dst)) {
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+    private static void writeToDownloads(Context ctx, String filename, byte[] data,
+                                         String mimeType) throws Exception {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            android.content.ContentValues values = new android.content.ContentValues();
+            values.put(android.provider.MediaStore.Downloads.DISPLAY_NAME, filename);
+            values.put(android.provider.MediaStore.Downloads.MIME_TYPE, mimeType);
+            values.put(android.provider.MediaStore.Downloads.IS_PENDING, 1);
+            android.net.Uri collection = android.provider.MediaStore.Downloads.getContentUri(
+                    android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY);
+            android.net.Uri itemUri = ctx.getContentResolver().insert(collection, values);
+            if (itemUri == null) throw new Exception("Could not create Downloads file.");
+            try (java.io.OutputStream os = ctx.getContentResolver().openOutputStream(itemUri)) {
+                if (os == null) throw new Exception("Could not open Downloads file for writing.");
+                os.write(data);
+            }
+            values.clear();
+            values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0);
+            ctx.getContentResolver().update(itemUri, values, null, null);
+        } else {
+            File downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS);
+            File dest = new File(downloadsDir, filename);
+            if (dest.exists()) {
+                String base = filename.contains(".") ? filename.substring(0, filename.lastIndexOf('.')) : filename;
+                String ext  = filename.contains(".") ? filename.substring(filename.lastIndexOf('.')) : "";
+                for (int n = 1; n < 10000; n++) {
+                    dest = new File(downloadsDir, base + " (" + n + ")" + ext);
+                    if (!dest.exists()) break;
+                }
+            }
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(dest)) {
+                fos.write(data);
+            }
         }
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void updateThemeButtons(Button dark, Button light, Button system, String active) {
         styleThemeBtn(dark,   "dark".equals(active));
