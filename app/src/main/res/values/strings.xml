@@ -3,4 +3,6 @@
     <string name="app_name">InfiniteCalc</string>
     <string name="history">History</string>
     <string name="no_history">No history yet</string>
+    <string name="privacy_policy">Privacy Policy</string>
+    <string name="privacy_policy_url">https://zaegan.github.io/InfiniteCalc/privacy.html</string>
 </resources>

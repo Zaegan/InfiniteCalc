@@ -2,7 +2,9 @@ package com.github.zaegan.infinitecalc;
 
 import android.app.Dialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -85,6 +87,10 @@ public class SettingsDialog extends DialogFragment {
             dismiss();
             ((MainActivity) requireActivity()).launchConfigImport();
         });
+
+        view.findViewById(R.id.btn_privacy_policy).setOnClickListener(v ->
+                startActivity(new Intent(Intent.ACTION_VIEW,
+                        Uri.parse(getString(R.string.privacy_policy_url)))));
 
         view.findViewById(R.id.btn_settings_close).setOnClickListener(v -> dismiss());
 
