@@ -24,6 +24,19 @@ public class RemapConfig {
 
     private static final String PREF_KEY = "remap_config_v1";
 
+    /** Bumped whenever {@link #makeDefault()} gains buttons that saved configs must also get. */
+    static final int SCHEMA_VERSION = 2;
+    private static final String KEY_VERSION = "v";
+
+    /** Configs saved before {@link #KEY_VERSION} existed. */
+    private static final int VERSION_UNVERSIONED = 1;
+
+    /** Ext row 2 reserves two slots for ‹ and ›, so only 3 middle slots are addressable. */
+    private static final int EXT_ROW2_MAX = 3;
+
+    /** Ext page index where {@link #makeDefault()} places the colon. */
+    private static final int DEFAULT_COLON_PAGE = 5;
+
     // ── Structure ─────────────────────────────────────────────────────────────
 
     /** Exactly 5 entries; row count is immutable, slot contents are remappable. */
@@ -137,7 +150,12 @@ public class RemapConfig {
         String json = prefs.getString(PREF_KEY, null);
         if (json == null) return makeDefault();
         try {
-            return fromJson(new JSONObject(json));
+            JSONObject root = new JSONObject(json);
+            int saved = root.optInt(KEY_VERSION, VERSION_UNVERSIONED);
+            RemapConfig cfg = fromJson(root);
+            // Write the upgraded layout back so the migration runs at most once.
+            if (saved < SCHEMA_VERSION) cfg.save(prefs);
+            return cfg;
         } catch (JSONException e) {
             return makeDefault();
         }
@@ -147,6 +165,7 @@ public class RemapConfig {
 
     public JSONObject toJson() throws JSONException {
         JSONObject root = new JSONObject();
+        root.put(KEY_VERSION, SCHEMA_VERSION);
 
         JSONArray bArr = new JSONArray();
         for (List<ButtonDef> row : basicRows) bArr.put(rowToJson(row));
@@ -183,7 +202,58 @@ public class RemapConfig {
         if (root.has("customPalette")) {
             palette = rowFromJson(root.getJSONArray("customPalette"));
         }
-        return new RemapConfig(basic, ext, palette);
+        RemapConfig cfg = new RemapConfig(basic, ext, palette);
+        cfg.migrate(root.optInt(KEY_VERSION, VERSION_UNVERSIONED));
+        return cfg;
+    }
+
+    // ── Migration ─────────────────────────────────────────────────────────────
+
+    /**
+     * Brings a config saved by an older build up to {@link #SCHEMA_VERSION}.
+     *
+     * <p>Steps are gated on the saved version, not on content, so a button the user
+     * deletes after migrating stays deleted instead of reappearing on the next launch.
+     */
+    private void migrate(int savedVersion) {
+        if (savedVersion < 2) addColon();
+    }
+
+    /**
+     * v1 → v2: the colon reached {@link #makeDefault()} after these configs were written,
+     * and {@code load} returns saved layouts verbatim, so it never appeared for anyone who
+     * had customised their layout.
+     */
+    private void addColon() {
+        if (contains(":")) return;
+        ButtonDef colon = def(":", ":");
+
+        // Prefer the slot fresh installs use, so migrated and new users match.
+        if (extPages.size() > DEFAULT_COLON_PAGE
+                && extPages.get(DEFAULT_COLON_PAGE).row2Middle.size() < EXT_ROW2_MAX) {
+            extPages.get(DEFAULT_COLON_PAGE).row2Middle.add(colon);
+            return;
+        }
+        for (ExtPage p : extPages) {
+            if (p.row2Middle.size() < EXT_ROW2_MAX) {
+                p.row2Middle.add(colon);
+                return;
+            }
+        }
+        // Every ext row 2 is full — give the colon a page of its own rather than drop it.
+        extPages.add(page(row(colon), new ArrayList<>()));
+    }
+
+    /** True if any placed slot inserts {@code insertText}. Ignores the palette, which isn't on the keypad. */
+    private boolean contains(String insertText) {
+        for (List<ButtonDef> r : basicRows) {
+            for (ButtonDef d : r) if (insertText.equals(d.insertText)) return true;
+        }
+        for (ExtPage p : extPages) {
+            for (ButtonDef d : p.row1)       if (insertText.equals(d.insertText)) return true;
+            for (ButtonDef d : p.row2Middle) if (insertText.equals(d.insertText)) return true;
+        }
+        return false;
     }
 
     private static JSONArray rowToJson(List<ButtonDef> row) throws JSONException {
